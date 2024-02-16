@@ -1,4 +1,4 @@
-CC = clang
+CC = cc
 CFLAGS = -Wall -Wpedantic -O2
 LDFLAGS = -lsodium
 TARGET = nacrypt
