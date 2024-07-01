@@ -8,3 +8,9 @@ To build, simply run the makefile with:
 ```sh
 make
 ```
+
+# Installation
+
+```sh
+make && sudo make install
+```
