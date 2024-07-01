@@ -12,3 +12,8 @@ $(TARGET): $(SRC)
 
 clean:
 	rm -f $(TARGET)
+
+.PHONY: install
+
+install:
+	mv ./$(TARGET) /usr/local/bin/
