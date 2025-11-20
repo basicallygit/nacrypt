@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <errno.h>
 
 #define KEY_LEN crypto_secretstream_xchacha20poly1305_KEYBYTES
@@ -129,7 +130,7 @@ void decrypt_file(const char* input_file, const char* output_file, const char* p
 		goto error;
 	}
 
-	(void)fread(header, 1, sizeof header, fp_in);
+	__attribute__((unused)) size_t _bytes_read = fread(header, 1, sizeof header, fp_in);
 	if (crypto_secretstream_xchacha20poly1305_init_pull(&st, header, key) != 0) {
 		fprintf(stderr, "%s: Incomplete header\n", input_file);
 		fflush(stderr);
