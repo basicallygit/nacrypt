@@ -1,5 +1,5 @@
 CC = cc
-CFLAGS = -Wall -Wpedantic -O2
+CFLAGS = -Wall -Wpedantic -Wextra -Werror -O2
 LDFLAGS = -lsodium
 TARGET = nacrypt
 
