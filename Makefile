@@ -1,6 +1,6 @@
 CC = cc
-CFLAGS = -Wall -Wpedantic -Wextra -Werror -O2
-LDFLAGS = -lsodium
+override CFLAGS += -Wall -Wpedantic -Wextra -Werror -O2
+override LDFLAGS += -lsodium
 TARGET = nacrypt
 
 SRC = main.c include/crypto.c include/utils.c
