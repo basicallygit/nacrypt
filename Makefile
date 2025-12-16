@@ -12,11 +12,16 @@ $(TARGET): $(SRC)
 	$(CC) $(CFLAGS) $(HARDENING) $^ -o $@ $(LDFLAGS)
 
 .PHONY: clean
-
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) *test.txt*
 
 .PHONY: install
-
 install:
 	mv ./$(TARGET) /usr/local/bin/
+
+.PHONY: test
+test: $(TARGET)
+	echo "This is a test message" > test.txt
+	echo "t3st?pa5sw0rd" | ./$(TARGET) test.txt -o test.txt.enc -e
+	echo "t3st?pa5sw0rd" | ./$(TARGET) test.txt.enc -o decoded_test.txt -d
+	cmp --silent test.txt decoded_test.txt || exit 1
