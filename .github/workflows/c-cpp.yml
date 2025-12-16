@@ -17,3 +17,5 @@ jobs:
       run: sudo apt-get install -y libsodium-dev libseccomp-dev
     - name: make
       run: make
+    - name: make test
+      run: make test
