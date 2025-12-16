@@ -3,7 +3,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include <stdbool.h>
 #include <errno.h>
+#include <seccomp.h>
+#include "nacrypt_security.h"
 
 #define KEY_LEN crypto_secretstream_xchacha20poly1305_KEYBYTES
 
@@ -48,7 +51,16 @@ void encrypt_file(const char* input_file, const char* output_file, const char* p
 		perror(output_file);
 		exit(1);
 	}
-	
+
+	#ifndef NO_SECCOMP
+	if (!apply_seccomp_filter()) {
+		perror("Failed to apply seccomp filter");
+		#ifndef ALLOW_SECCOMP_FAIL
+		exit(1);
+		#endif //ALLOW_SECCOMP_FAIL
+	}
+	#endif //NO_SECCOMP
+
 	// Generate a crypto random salt, This will be placed at the beginning of the file so it can be appended
 	// to the password given on decryption to allow derivation of the same key
 	randombytes_buf(salt, sizeof salt);
@@ -114,6 +126,15 @@ void decrypt_file(const char* input_file, const char* output_file, const char* p
 		perror(output_file);
 		exit(1);
 	}
+
+	#ifndef NO_SECCOMP
+	if (!apply_seccomp_filter()) {
+		perror("Failed to apply seccomp filter");
+		#ifndef ALLOW_SECCOMP_FAIL
+		exit(1);
+		#endif //ALLOW_SECCOMP_FAIL
+	}
+	#endif //NO_SECCOMP
 
 	// Read the salt placed at the start of the file
 	size_t salt_bytes_read = fread(salt, 1, crypto_pwhash_SALTBYTES, fp_in);
