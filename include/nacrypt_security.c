@@ -1,5 +1,6 @@
 #ifndef NO_SECCOMP
 #include <seccomp.h>
+#include <sys/mman.h>
 #endif //NO_SECCOMP
 #include <stdbool.h>
 #include <sys/prctl.h>
