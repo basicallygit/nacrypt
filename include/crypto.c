@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <seccomp.h>
 #include "nacrypt_security.h"
+#include "header.h"
 
 #define KEY_LEN crypto_secretstream_xchacha20poly1305_KEYBYTES
 
@@ -61,6 +62,20 @@ void encrypt_file(const char* input_file, const char* output_file, const char* p
 	}
 	#endif //NO_SECCOMP
 
+	NacryptHeader nacrypt_header;
+	if (init_header(&nacrypt_header, KDF_ALGORITHM_ARGON2ID, ENC_ALGORITHM_CHACHA20POLY1305) != 0) {
+		fprintf(stderr, "FATAL: failed to create header\n");
+		fflush(stderr);
+		goto error;
+	}
+	
+	// Write the header to the start of the file
+	if (write_header(&nacrypt_header, fp_out) != 0) {
+		fprintf(stderr, "FATAL: failed to write header\n");
+		fflush(stderr);
+		goto error;
+	}
+
 	// Generate a crypto random salt, This will be placed at the beginning of the file so it can be appended
 	// to the password given on decryption to allow derivation of the same key
 	randombytes_buf(salt, sizeof salt);
@@ -72,7 +87,7 @@ void encrypt_file(const char* input_file, const char* output_file, const char* p
 		goto error;
 	}
 
-	// Write the salt to the start of the file
+	// Write the salt
 	fwrite(salt, 1, sizeof salt, fp_out);
 	
 	
@@ -135,6 +150,33 @@ void decrypt_file(const char* input_file, const char* output_file, const char* p
 		#endif //ALLOW_SECCOMP_FAIL
 	}
 	#endif //NO_SECCOMP
+
+	NacryptHeader nacrypt_header;
+	switch(parse_header(&nacrypt_header, fp_in)) {
+		case 0:
+			break;
+		case ERR_NOT_NACRYPT_FILE:
+			fprintf(stderr, "%s: Not a NACRYPT file\n", input_file);
+			fflush(stderr);
+			goto error;
+		case ERR_UNKNOWN_HEADER_VERSION:
+			fprintf(stderr, "%s: Unknown header version\n", input_file);
+			fflush(stderr);
+			goto error;
+		case ERR_UNKNOWN_KDF_ALGORITHM:
+			fprintf(stderr, "%s: Unknown key derivation algorithm\n", input_file);
+			fflush(stderr);
+			goto error;
+		case ERR_UNKNOWN_ENC_ALGORITHM:
+			fprintf(stderr, "%s: Unknown encryption algorithm\n", input_file);
+			fflush(stderr);
+			goto error;
+		default:
+			fprintf(stderr, "%s: Error while parsing header\n", input_file);
+			fflush(stderr);
+			goto error;
+	}
+	
 
 	// Read the salt placed at the start of the file
 	size_t salt_bytes_read = fread(salt, 1, crypto_pwhash_SALTBYTES, fp_in);
