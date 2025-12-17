@@ -6,7 +6,7 @@ HARDENING = -D_FORTIFY_SOURCE=2 -fstack-protector-all \
 LDFLAGS = -lsodium -lseccomp
 TARGET = nacrypt
 
-SRC = main.c include/crypto.c include/utils.c include/nacrypt_security.c
+SRC = main.c include/crypto.c include/utils.c include/header.c include/nacrypt_security.c
 
 $(TARGET): $(SRC)
 	$(CC) $(CFLAGS) $(HARDENING) $^ -o $@ $(LDFLAGS)
