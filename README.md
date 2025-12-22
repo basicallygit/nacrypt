@@ -16,7 +16,7 @@ nacrypt plaintext.txt.enc -o plaintext_decrypted.txt
 
 # Building
 Install [libsodium](https://doc.libsodium.org/installation) and libseccomp <br>
-Debian / Ubuntu: `sudo apt install -y libsodium-dev libseccomp-dev`
+Debian / Ubuntu: `sudo apt install -y libsodium-dev libseccomp-dev`<br>
 Arch & Derivatives: `sudo pacman -S libsodium libseccomp`
 
 To build, simply run the makefile with:
