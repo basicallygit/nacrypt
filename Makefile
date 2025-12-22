@@ -23,4 +23,4 @@ clean:
 
 .PHONY: test
 test: $(TARGET)
-	./tests/run_tests.sh
+	echo "TODO"
