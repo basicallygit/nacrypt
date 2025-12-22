@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/prctl.h>
+#include <fcntl.h>
 #include "utils.h"
 #endif // !defined(NO_SECCOMP)
 #include <stdbool.h>
@@ -52,6 +53,7 @@ bool apply_seccomp_filter(int input_fd, int output_fd) {
 						SCMP_A0(SCMP_CMP_EQ, fd_whitelist[i]));
 	}
 	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(brk), 0);
+	
 	// Block mmap PROT_EXEC
 	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(mmap), 1,
 					SCMP_A2(SCMP_CMP_MASKED_EQ, PROT_EXEC, 0));
@@ -63,13 +65,32 @@ bool apply_seccomp_filter(int input_fd, int output_fd) {
 	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(mmap), 1,
 					SCMP_A3(SCMP_CMP_MASKED_EQ, MAP_DROPPABLE | MAP_PRIVATE,
 												MAP_DROPPABLE | MAP_PRIVATE));
+	
 	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(munmap), 0);
 	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(mprotect), 1,
 					SCMP_A2(SCMP_CMP_MASKED_EQ, PROT_EXEC, 0));
 	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(getrandom), 0);
 	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(dup), 0);
-	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(fcntl), 0);
+	
+	// Safe fcntl args
+	// fnctl F_GETFD || F_SETFD
+	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(fcntl), 1,
+					SCMP_A1(SCMP_CMP_EQ, F_GETFD));
+	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(fcntl), 1,
+					SCMP_A1(SCMP_CMP_EQ, F_SETFD));
+	// fnctl F_GETFL || F_SETFL
+	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(fcntl), 1,
+					SCMP_A1(SCMP_CMP_EQ, F_GETFL));
+	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(fcntl), 1,
+					SCMP_A1(SCMP_CMP_EQ, F_SETFL));
+	// fnctl F_DUPFD || F_DUPFD_CLOEXEC
+	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(fcntl), 1,
+					SCMP_A1(SCMP_CMP_EQ, F_DUPFD));
+	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(fcntl), 1,
+					SCMP_A1(SCMP_CMP_EQ, F_DUPFD_CLOEXEC));
+
 	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(rt_sigprocmask), 0);
+	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(rt_sigreturn), 0);
 
 	if (seccomp_load(ctx) != 0) return false;
 	return true;
