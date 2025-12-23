@@ -23,8 +23,15 @@ To build, simply run the makefile with:
 ```sh
 make
 ```
+or with clang CFI:
+```sh
+make CLANG_CFI=y
+```
 
-### seccomp
+### Formatting
+Format the project according to `.clang-format` using `./format.sh` or `./format.sh --check` to dry run
+
+### Seccomp
 Nacrypt applies a very strict seccomp filter to itself before processing the input file. (see [seccompfilter.c](https://github.com/basicallygit/nacrypt/blob/main/include/seccompfilter.c))<br>
 If this causes issues it can be disabled with the `-DNO_SECCOMP` CFLAG or allowed to fail with `-DALLOW_SECCOMP_FAIL` (on platforms without seccomp)
 
