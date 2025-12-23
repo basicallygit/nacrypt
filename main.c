@@ -8,7 +8,7 @@
 
 #define MAX_PASSWORD_SIZE 512
 
-void print_usage(FILE *stream) {
+void print_usage(FILE* stream) {
 	fprintf(stream, "Usage: nacrypt <inputfile> -o <outputfile> [-e|-d]\n\n");
 	fprintf(stream, "Options:\n");
 	fprintf(
@@ -25,7 +25,7 @@ enum Mode {
 	UNSPECIFIED,
 };
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
 	if (argc == 2 &&
 		(strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0))
 	{
@@ -37,8 +37,8 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	char *input_filename = NULL;
-	char *output_filename = NULL;
+	char* input_filename = NULL;
+	char* output_filename = NULL;
 	enum Mode mode = UNSPECIFIED;
 
 	for (int i = 1; i < argc; i++) {
@@ -80,13 +80,13 @@ int main(int argc, char **argv) {
 	}
 
 	// Open input and output files now before entering seccomp restricted mode
-	FILE *fp_input = fopen(input_filename, "rb");
+	FILE* fp_input = fopen(input_filename, "rb");
 	if (fp_input == NULL) {
 		eprintf("FATAL: Failed to open %s: %s\n", input_filename,
 				strerror(errno));
 		return 1;
 	}
-	FILE *fp_output = fopen(output_filename, "wb");
+	FILE* fp_output = fopen(output_filename, "wb");
 	if (fp_output == NULL) {
 		eprintf("FATAL: Failed to open %s: %s\n", output_filename,
 				strerror(errno));

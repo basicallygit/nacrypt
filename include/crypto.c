@@ -10,9 +10,9 @@
 #define CHUNK_SIZE 4096
 #define KEY_LEN crypto_secretstream_xchacha20poly1305_KEYBYTES
 
-bool derive_key_from_password(unsigned char *key, unsigned long long keylen,
-							  const unsigned char *const salt,
-							  const char *const password,
+bool derive_key_from_password(unsigned char* key, unsigned long long keylen,
+							  const unsigned char* const salt,
+							  const char* const password,
 							  unsigned long long opslimit, size_t memlimit) {
 	if (crypto_pwhash(key, keylen, password, strlen(password), salt, opslimit,
 					  memlimit, NACRYPT_KDF_ALG_DEFAULT) != 0)
@@ -22,7 +22,7 @@ bool derive_key_from_password(unsigned char *key, unsigned long long keylen,
 	return true;
 }
 
-bool encrypt_file(FILE *input_file, FILE *output_file, const char *password,
+bool encrypt_file(FILE* input_file, FILE* output_file, const char* password,
 				  unsigned long long opslimit, size_t memlimit) {
 	if (input_file == NULL || output_file == NULL)
 		return false;
@@ -67,7 +67,7 @@ bool encrypt_file(FILE *input_file, FILE *output_file, const char *password,
 	return true;
 }
 
-bool decrypt_file(FILE *input_file, FILE *output_file, const char *password,
+bool decrypt_file(FILE* input_file, FILE* output_file, const char* password,
 				  unsigned long long opslimit, size_t memlimit) {
 	if (input_file == NULL || output_file == NULL)
 		return false;

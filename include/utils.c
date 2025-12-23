@@ -3,8 +3,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-bool file_exists(const char *filename) {
-	FILE *file = fopen(filename, "rb");
+bool file_exists(const char* filename) {
+	FILE* file = fopen(filename, "rb");
 	if (file) {
 		fclose(file);
 		return true;
@@ -14,8 +14,8 @@ bool file_exists(const char *filename) {
 	return false;
 }
 
-bool file_is_empty(const char *filename) {
-	FILE *file = fopen(filename, "rb");
+bool file_is_empty(const char* filename) {
+	FILE* file = fopen(filename, "rb");
 	if (file == NULL)
 		return true;
 
