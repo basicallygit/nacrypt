@@ -23,4 +23,5 @@ clean:
 
 .PHONY: test
 test: $(TARGET)
-	echo "TODO"
+	# Check formatting against .clang-format
+	./format.sh --check
