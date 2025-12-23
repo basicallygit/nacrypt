@@ -24,4 +24,5 @@ clean:
 .PHONY: test
 test: $(TARGET)
 	# Check formatting against .clang-format
+	chmod +x ./format.sh
 	./format.sh --check
