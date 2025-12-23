@@ -34,3 +34,7 @@ test: $(TARGET)
 	# Check formatting against .clang-format
 	chmod +x ./format.sh
 	./format.sh --check
+
+.PHONY: install
+install: $(TARGET)
+	mv $(TARGET) /usr/local/bin/$(TARGET)
