@@ -1,0 +1,11 @@
+nacrypt Copyright 2025 basicallygit
+
+This project makes use of the following third-party software / libraries
+
+libsodium: https://github.com/jedisct1/libsodium
+Copyright (c) 2013-2025 Frank Denis
+Licensed under the ISC License
+
+libseccomp: https://github.com/seccomp/libseccomp
+Copyright (c) 2012-2025 The libseccomp project
+Licensed under the GNU Lesser General Public License v2.1
