@@ -1,7 +1,7 @@
 CC = clang
 CFLAGS = -O2 -Wall -Wpedantic -Wextra -Werror -Wno-missing-field-initializers -Iinclude/ -I.
 LDFLAGS = -lsodium -lseccomp
-HARDENINGCFLAGS = -D_FORTIFY_SOURCE=2 -fstack-protector-all \
+HARDENINGCFLAGS = -D_FORTIFY_SOURCE=3 -fstack-protector-all \
 	    -fstack-clash-protection -fno-delete-null-pointer-checks
 HARDENINGLDFLAGS = -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack -fPIE -pie
 CFIFLAGS = -fsanitize=cfi -flto -fvisibility=hidden
