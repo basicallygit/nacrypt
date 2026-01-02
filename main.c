@@ -1,5 +1,5 @@
 #include "crypto.h"
-#include "seccompfilter.h"
+#include "sandbox.h"
 #include "utils.h"
 #include <errno.h>
 #include <stddef.h>
@@ -94,21 +94,21 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
-#ifndef NO_SECCOMP
+#ifndef NO_SANDBOX
 	int input_fd = fileno(fp_input);
 	int output_fd = fileno(fp_output);
 
-	if (!apply_seccomp_filter(input_fd, output_fd)) {
-#ifdef ALLOW_SECCOMP_FAIL
-		eprintf("WARNING: Failed to apply seccomp filter.. "
-				"(-DALLOW_SECCOMP_FAIL)\n");
+	if (!apply_sandbox(input_fd, output_fd)) {
+#ifdef ALLOW_SANDBOX_FAIL
+		eprintf("WARNING: Failed to apply sandbox.. "
+				"(-DALLOW_SANDBOX_FAIL)\n");
 #else
-		eprintf("FATAL: Failed to apply seccomp filter.. (-DALLOW_SECCOMP_FAIL "
+		eprintf("FATAL: Failed to apply sandbox.. (-DALLOW_SANDBOX_FAIL "
 				"not set)\n");
 		goto error;
 #endif
 	}
-#endif // !defined(NO_SECCOMP)
+#endif // !defined(NO_SANDBOX)
 
 	const unsigned char NACRYPT_MAGIC[4] = {0x4E, 0x41, 0x1F, 0xF0};
 	unsigned char read_magic_buf[4];
