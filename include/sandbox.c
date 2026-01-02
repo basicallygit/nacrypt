@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #ifndef NO_SANDBOX
 #include "utils.h"
 #include <fcntl.h>
@@ -7,20 +8,23 @@
 #include <seccomp.h>
 #include <sys/mman.h>
 #include <sys/prctl.h>
+
 // Kernel 6.11+ can use MAP_DROPPABLE for mmap vDSO
 #ifndef MAP_DROPPABLE
 #define MAP_DROPPABLE 0x08
 #endif // !defined(MAP_DROPPABLE)
-#endif // defined(__linux__)
+
+#elif defined(__FreeBSD__) 
+#include <sys/capsicum.h>
+#endif // OS checks
 
 #endif // !defined(NO_SANDBOX)
 
-#include <stdbool.h>
 
 bool apply_sandbox(int input_fd, int output_fd) {
 #ifdef NO_SANDBOX
 	return false;
-#else
+#else // !defined(NO_SANDBOX)
 #if defined(__linux__)
 	if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
 		perror("prctl(PR_SET_NO_NEW_PRIVS)");
@@ -37,7 +41,7 @@ bool apply_sandbox(int input_fd, int output_fd) {
 	scmp_filter_ctx ctx = seccomp_init(SCMP_ACT_TRAP);
 #else
 	scmp_filter_ctx ctx = seccomp_init(SCMP_ACT_KILL_PROCESS);
-#endif
+#endif // NACRYPT_SECCOMP_DEBUG_TEST
 
 	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(exit_group), 0);
 	seccomp_rule_add(ctx, SCMP_ACT_ALLOW, SCMP_SYS(exit), 0);
@@ -109,9 +113,25 @@ bool apply_sandbox(int input_fd, int output_fd) {
 		perror("pledge");
 		return false;
 	}
+
 	return true;
-#else
+#elif defined(__FreeBSD__)
+	int fd_whitelist[] = {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, input_fd,
+						  output_fd};
+	int fd_count = sizeof(fd_whitelist) / sizeof(fd_whitelist[0]);
+	
+	cap_rights_t rights;
+	cap_rights_init(&rights CAP_WRITE, CAP_READ, CAP_SEEK, CAP_FSTAT);
+	
+	for (int i = 0; i < fd_count; i++) {
+		if (cap_rights_limit(fd_whitelist[i], &rights) != 0) return false;
+	}
+
+	if (cap_enter() != 0) return false; // Enter restricted capabilities mode
+
+	return true;
+#else // !defined(__linux__) && !defined(__OpenBSD__) && !defined(__FreeBSD__)
 	return false; // Fallback return value on non-supported OS
-#endif // defined(__linux__) | defined(__OpenBSD__)
+#endif // OS checks
 #endif // NO_SANDBOX
 }
