@@ -1,6 +1,10 @@
 CC = clang
-CFLAGS = -O2 -Wall -Wpedantic -Wextra -Werror -Wno-missing-field-initializers -Iinclude/ -I.
-LDFLAGS = -lsodium -lseccomp
+CFLAGS = -O2 -Wall -Wpedantic -Wextra -Werror -Wno-missing-field-initializers -Wno-unused-command-line-argument -Iinclude/ -I. -I/usr/local/include -L/usr/local/lib
+LDFLAGS = -lsodium
+UNAME_S = $(shell uname -s)
+ifeq ($(UNAME_S),Linux)
+	LDFLAGS += -lseccomp
+endif
 HARDENINGCFLAGS = -D_FORTIFY_SOURCE=3 -fstack-protector-all \
 	    -fstack-clash-protection -fno-delete-null-pointer-checks
 HARDENINGLDFLAGS = -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack -fPIE -pie
