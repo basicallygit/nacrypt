@@ -5,6 +5,9 @@ UNAME_S = $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
 	LDFLAGS += -lseccomp
 endif
+ifeq ($(UNAME_S),OpenBSD)
+	CFLAGS += -Wno-unused-parameter
+endif
 HARDENINGCFLAGS = -D_FORTIFY_SOURCE=3 -fstack-protector-all \
 	    -fstack-clash-protection -fno-delete-null-pointer-checks
 HARDENINGLDFLAGS = -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack -fPIE -pie
