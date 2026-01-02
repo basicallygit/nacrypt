@@ -14,12 +14,11 @@
 #define MAP_DROPPABLE 0x08
 #endif // !defined(MAP_DROPPABLE)
 
-#elif defined(__FreeBSD__) 
+#elif defined(__FreeBSD__)
 #include <sys/capsicum.h>
 #endif // OS checks
 
 #endif // !defined(NO_SANDBOX)
-
 
 bool apply_sandbox(int input_fd, int output_fd) {
 #ifdef NO_SANDBOX
@@ -119,18 +118,20 @@ bool apply_sandbox(int input_fd, int output_fd) {
 	int fd_whitelist[] = {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, input_fd,
 						  output_fd};
 	int fd_count = sizeof(fd_whitelist) / sizeof(fd_whitelist[0]);
-	
+
 	cap_rights_t rights;
 	cap_rights_init(&rights CAP_WRITE, CAP_READ, CAP_SEEK, CAP_FSTAT);
-	
+
 	for (int i = 0; i < fd_count; i++) {
-		if (cap_rights_limit(fd_whitelist[i], &rights) != 0) return false;
+		if (cap_rights_limit(fd_whitelist[i], &rights) != 0)
+			return false;
 	}
 
-	if (cap_enter() != 0) return false; // Enter restricted capabilities mode
+	if (cap_enter() != 0)
+		return false; // Enter restricted capabilities mode
 
 	return true;
-#else // !defined(__linux__) && !defined(__OpenBSD__) && !defined(__FreeBSD__)
+#else  // !defined(__linux__) && !defined(__OpenBSD__) && !defined(__FreeBSD__)
 	return false; // Fallback return value on non-supported OS
 #endif // OS checks
 #endif // NO_SANDBOX
