@@ -1,5 +1,5 @@
 CC = clang
-CFLAGS = -O2 -Wall -Wpedantic -Wextra -Wno-missing-field-initializers -Wno-unused-command-line-argument -Iinclude/ -I. -I/usr/local/include -L/usr/local/lib
+CFLAGS = -O2 -fPIC -Wall -Wpedantic -Wextra -Wno-missing-field-initializers -Wno-unused-command-line-argument -Iinclude/ -I. -I/usr/local/include -L/usr/local/lib
 LDFLAGS = -lsodium
 UNAME_S = $(shell uname -s)
 ifeq ($(UNAME_S),Linux)

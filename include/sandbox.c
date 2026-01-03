@@ -120,7 +120,7 @@ bool apply_sandbox(int input_fd, int output_fd) {
 	int fd_count = sizeof(fd_whitelist) / sizeof(fd_whitelist[0]);
 
 	cap_rights_t rights;
-	cap_rights_init(&rights CAP_WRITE, CAP_READ, CAP_SEEK, CAP_FSTAT);
+	cap_rights_init(&rights, CAP_WRITE, CAP_READ, CAP_SEEK, CAP_FSTAT);
 
 	for (int i = 0; i < fd_count; i++) {
 		if (cap_rights_limit(fd_whitelist[i], &rights) != 0)
