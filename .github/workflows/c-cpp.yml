@@ -16,10 +16,10 @@ jobs:
     - name: Install clang-format-20
       run: sudo apt-get update && sudo apt-get install -y clang-format-20
     - name: Install dependencies
-      run: sudo apt-get install -y libsodium-dev libseccomp-dev
+      run: sudo apt-get install -y libsodium-dev libseccomp-dev libcap-dev
     - name: make
-      run: make CLANG_CFI=y
+      run: make CLANG_CFI=y TIGHTENED_SANDBOX=y
     - name: make test
-      run: make CLANG_CFI=y test
+      run: make CLANG_CFI=y TIGHTENED_SANDBOX=y test
     - name: make install
       run: sudo make install
