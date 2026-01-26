@@ -1,38 +1,48 @@
 CC = clang
 CFLAGS = -O2 -fPIC -Wall -Wpedantic -Wextra -Wno-missing-field-initializers -Wno-unused-command-line-argument -Iinclude/ -I. -I/usr/local/include -L/usr/local/lib
 LDFLAGS = -lsodium
-UNAME_S = $(shell uname -s)
-ifeq ($(UNAME_S),Linux)
-	LDFLAGS += -lseccomp
-endif
-ifeq ($(UNAME_S),OpenBSD)
-	CFLAGS += -Wno-unused-parameter
-endif
-HARDENINGCFLAGS = -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -fstack-protector-all \
-	    -fstack-clash-protection -fno-delete-null-pointer-checks \
-		-Wconversion -Werror=conversion -Wsign-conversion -Werror=sign-conversion \
-		-Wimplicit-fallthrough -Werror=implicit-fallthrough -Wformat -Wformat=2 -Werror=format
-HARDENINGLDFLAGS = -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack -fPIE -pie
+HARDENING_CFLAGS = -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -fstack-protector-all \
+	-fstack-clash-protection -fno-delete-null-pointer-checks \
+	-Wconversion -Werror=conversion -Wsign-conversion -Werror=sign-conversion \
+	-Wimplicit-fallthrough -Werror=implicit-fallthrough -Wformat -Wformat=2 -Werror=format
+HARDENING_LDFLAGS = -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack -fPIE -pie
 CFIFLAGS = -fsanitize=cfi -flto -fvisibility=hidden
 TARGET = nacrypt
 SRC = main.c $(wildcard include/*.c)
 OBJ = $(SRC:.c=.o)
 
-ifeq ($(CLANG_CFI),y)
-	ifneq ($(OS),Windows_NT)
-		CFLAGS += $(CFIFLAGS)
-		LDFLAGS += $(CFIFLAGS)
+UNAME_S = $(shell uname -s)
+ifeq ($(UNAME_S),Linux)
+	ifndef NO_SANDBOX
+		LDFLAGS += -lseccomp
 	endif
+endif
+ifeq ($(UNAME_S),OpenBSD)
+	CFLAGS += -Wno-unused-parameter
+endif
+ifeq ($(CLANG_CFI),y)
+	CFLAGS += $(CFIFLAGS)
+	LDFLAGS += $(CFIFLAGS)
+endif
+ifeq ($(NO_SANDBOX),y)
+	CFLAGS += -DNO_SANDBOX
+endif
+ifeq ($(ALLOW_SANDBOX_FAIL),y)
+	CFLAGS += -DALLOW_SANDBOX_FAIL
+endif
+ifeq ($(TIGHTENED_SANDBOX),y)
+	CFLAGS += -DTIGHTENED_SANDBOX
+	LDFLAGS += -lcap
 endif
 
 .PHONY: all
 all: $(TARGET)
 
 $(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) $(HARDENINGCFLAGS) $(LDFLAGS) $(HARDENINGLDFLAGS) -o $@ $^
+	$(CC) -s $(CFLAGS) $(HARDENING_CFLAGS) $(LDFLAGS) $(HARDENING_LDFLAGS) -o $@ $^
 
 %.o: %.c
-	$(CC) $(CFLAGS) $(HARDENINGCFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(HARDENING_CFLAGS) -c $< -o $@
 
 .PHONY: clean
 clean:
@@ -40,7 +50,6 @@ clean:
 
 .PHONY: test
 test: $(TARGET)
-	# Check formatting against .clang-format
 	chmod +x ./format.sh
 	./format.sh --check
 

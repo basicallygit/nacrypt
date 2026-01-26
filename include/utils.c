@@ -10,7 +10,7 @@ bool file_exists(const char* filename) {
 		return true;
 	}
 	if (errno == EACCES)
-		return true; // File exists but permission was denied opening
+		return true; // File exists but permission was denied
 	return false;
 }
 

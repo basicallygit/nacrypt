@@ -3,6 +3,6 @@
 
 #include <stdbool.h>
 
-bool apply_sandbox(int input_fd, int output_fd);
+int apply_sandbox(int input_fd, int output_fd);
 
-#endif // !defined(SANDBOX_H)
+#endif // !defined(NACRYPT_SANDBOX_H)

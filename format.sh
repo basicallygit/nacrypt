@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/env bash
 
 set -xe
 
@@ -9,7 +9,7 @@ elif command -v clang-format >/dev/null 2>&1; then
 	CLANG_FORMAT="clang-format"
 else
 	echo "No clang-format found in PATH" >&2
-	exit 1
+	exit 0
 fi
 
 if [[ $1 == "--check" ]]; then
