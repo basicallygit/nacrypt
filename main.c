@@ -186,10 +186,10 @@ int main(int argc, char** argv) {
 				if (verbose == 1)
 					puts("[VERBOSE] Treating file as encrypt since no valid "
 						 "header found");
-				mode =
-					ENCRYPT; // No valid nacrypt header found, treat as ENCRYPT
-				rewind(fp_input); // Go back to the start to make sure the whole
-								  // file is encrypted
+				// No valid nacrypt header found, treat as ENCRYPT
+				mode = ENCRYPT;
+				// Go back to the start to make sure the whole file is encrypted
+				rewind(fp_input);
 			}
 		}
 	}
