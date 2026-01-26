@@ -119,13 +119,11 @@ int main(int argc, char** argv) {
 	int output_fd = fileno(fp_output);
 
 	if (verbose == 1) {
-		printf("[VERBOSE] Applying sandbox.. (level: "
 #if defined(TIGHTENED_SANDBOX)
-			   "TIGHTENED"
+		printf("[VERBOSE] Applying sandbox.. (level: TIGHTENED)\n");
 #else
-			   "BASIC"
+		printf("[VERBOSE] Applying sandbox.. (level: BASIC)\n");
 #endif // defined(TIGHTENED_SANDBOX) || !defined(TIGHTENED_SANDBOX)
-			   ")\n");
 	}
 	if (apply_sandbox(input_fd, output_fd) != 0) {
 #if defined(ALLOW_SANDBOX_FAIL)
