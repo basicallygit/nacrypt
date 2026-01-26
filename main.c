@@ -150,7 +150,7 @@ int main(int argc, char** argv) {
 	uint32_t opslimit = NACRYPT_OPSLIMIT_DEFAULT;
 	uint32_t memlimit = NACRYPT_MEMLIMIT_DEFAULT;
 
-	if (mode != ENCRYPT) { // Attempt to parse header (mode decrypt or unspecified)
+	if (mode != ENCRYPT) { // Attempt to parse header (decrypt or unspecified)
 		if (fread(magic_buf, 1, 4, fp_input) == 4 &&
 			memcmp(NACRYPT_MAGIC, magic_buf, 4) == 0 &&
 			fread(&opslimit, sizeof(opslimit), 1, fp_input) == 1 &&
