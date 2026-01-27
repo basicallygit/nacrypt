@@ -212,6 +212,7 @@ int main(int argc, char** argv) {
 		password[strcspn(password, "\n")] = '\0';
 	} else {
 		perror("FATAL: fgets");
+		sodium_free(password);
 		goto error;
 	}
 
