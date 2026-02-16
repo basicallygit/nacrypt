@@ -1,5 +1,5 @@
 CC = clang
-CFLAGS = -O2 -fPIC -Wall -Wpedantic -Wextra -Wno-missing-field-initializers -Wno-unused-command-line-argument -Iinclude/ -I. -I/usr/local/include -L/usr/local/lib
+CFLAGS = -std=gnu17 -O2 -fPIC -Wall -Wpedantic -Wextra -Wno-missing-field-initializers -Wno-unused-command-line-argument -Iinclude/ -I. -I/usr/local/include -L/usr/local/lib
 LDFLAGS = -lsodium
 HARDENING_CFLAGS = -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -fstack-protector-all \
 	-fstack-clash-protection -fno-delete-null-pointer-checks \
@@ -14,7 +14,12 @@ OBJ = $(SRC:.c=.o)
 UNAME_S = $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
 	ifndef NO_SANDBOX
-		LDFLAGS += -lseccomp
+		LDFLAGS += -lseccomp -lcap
+	endif
+	# Check for linux/landlock.h
+	HAS_LANDLOCK := $(shell $(CC) -Wno-error -x c -include linux/landlock.h -E /dev/null >/dev/null 2>&1 && echo yes)
+	ifeq ($(HAS_LANDLOCK),yes)
+		CFLAGS += -DHAS_LANDLOCK_H
 	endif
 endif
 ifeq ($(UNAME_S),OpenBSD)
@@ -29,10 +34,6 @@ ifeq ($(NO_SANDBOX),y)
 endif
 ifeq ($(ALLOW_SANDBOX_FAIL),y)
 	CFLAGS += -DALLOW_SANDBOX_FAIL
-endif
-ifeq ($(TIGHTENED_SANDBOX),y)
-	CFLAGS += -DTIGHTENED_SANDBOX
-	LDFLAGS += -lcap
 endif
 
 .PHONY: all

@@ -119,20 +119,17 @@ int main(int argc, char** argv) {
 	int output_fd = fileno(fp_output);
 
 	if (verbose == 1) {
-#if defined(TIGHTENED_SANDBOX)
-		printf("[VERBOSE] Applying sandbox.. (level: TIGHTENED)\n");
-#else
-		printf("[VERBOSE] Applying sandbox.. (level: BASIC)\n");
-#endif // defined(TIGHTENED_SANDBOX) || !defined(TIGHTENED_SANDBOX)
+		puts("[VERBOSE] Applying sandbox..");
 	}
 	if (apply_sandbox(input_fd, output_fd) != 0) {
 #if defined(ALLOW_SANDBOX_FAIL)
-		eprintf("WARNING: Failed to apply sandbox.. (-DALLOW_SANDBOX_FAIL)\n");
+		eprintf("WARNING: Failed to apply sandbox.. (non-fatal because of "
+				"-DALLOW_SANDBOX_FAIL)\n");
 #else
 		eprintf("FATAL: Failed to apply sandbox.. (-DALLOW_SANDBOX_FAIL not "
 				"set)\n");
 		goto error;
-#endif // defined(ALLOW_SANDBOX_FAIL)
+#endif // defined(ALLOW_SANDBOX_FAIL) || !defined(ALLOW_SANDBOX_FAIL)
 	}
 #endif // !defined(NO_SANDBOX)
 	if (verbose == 1)
