@@ -15,11 +15,18 @@ Options:
   -vv | --verbose: [optional] print verbose output
 ```
 
+# Installation
+Nacrypt is available on the [AUR](https://aur.archlinux.org/packages/nacrypt)<br>
+To install it simply use your favourite AUR helper or manually with makepkg -si
+```sh
+paru/yay -S nacrypt
+```
+
 # Building
 ### Dependencies
 Install [libsodium](https://doc.libsodium.org/installation)<br>
-[Optional] libseccomp (sandboxing)<br>
-[Optional] libcap (tightened sandbox)<br>
+libseccomp (sandboxing)<br>
+libcap (tightened sandbox)<br>
 Debian / Ubuntu: `sudo apt install -y libsodium-dev libseccomp-dev libcap-dev`<br>
 Arch & Derivatives: `sudo pacman -S --needed libsodium libseccomp libcap`
 
@@ -28,7 +35,6 @@ Arch & Derivatives: `sudo pacman -S --needed libsodium libseccomp libcap`
 make
 # OR use one or multiple of the following options:
 # CLANG_CFI=y (enables clang Control Flow Integrity)
-# TIGHTENED_SANDBOX=y (enables extra sandboxing measures)
 # ALLOW_SANDBOX_FAIL=y (treats sandbox failing to apply as non-fatal)
 # NO_SANDBOX=y (completely disable the sandbox)
 make OPTION=y
@@ -53,18 +59,8 @@ Default KDF parameters are set to SENSITIVE (1GB ram, 4 passes) and salted with 
 Supplied passwords, encryption keys and plaintext buffers are allocated using `sodium_malloc()`, which prevents them from appearing in dumps or being swapped to disk
 
 ### Hardening
-Although great care has been taken with all allocations and buffer writes by using constant defined sizes and checks, This is C after all:<br>
+Although great care has been taken with all allocations and buffer writes by using constant defined sizes and checks, multiple hardening options are applied<br>
 Nacrypt applies a wide range of compiler hardening flags (see Makefile). `sodium_malloc()` also provides guard pages for all heap allocations<br>
-The default sandbox uses a strict seccomp filter only allowing basic memory management, and reading and writing to already open files. On OpenBSD/FreeBSD this uses `pledge()` and `capsicum` instead<br>
-Specifying `TIGHTENED_SANDBOX=y` will additionally use namespaces, chroot and capability dropping
+On linux, the sandbox will use chroot jails, landlock and seccomp. On openbsd `pledge("stdio")` is used and on freebsd `capsicum` is used<br>
 
 The strong cryptographic defaults and hardening make nacrypt well-suited for storage of files on untrusted cloud services which could potentially attempt to tamper with your files
-
-# Installation
-```sh
-make && sudo make install
-```
-## Nix
-```sh
-nix profile install .
-```
