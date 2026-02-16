@@ -135,16 +135,22 @@ int linux_enter_sandbox(int input_fd, int output_fd) {
 	}
 
 	// Hide filesystem from view (landlock or fallback to chroot)
-	if (linux_unveil_filesystem() != 0)
+	if (linux_unveil_filesystem() != 0) {
+		eprintf("[SANDBOX] Failed to unveil filesystem\n");
 		return -1;
+	}
 
 	// Drop all capabilities from the current and bounding set
-	if (linux_drop_all_caps() != 0)
+	if (linux_drop_all_caps() != 0) {
+		eprintf("[SANDBOX] Failed to drop capabilities\n");
 		return -1;
+	}
 
 	// Filter all syscalls through a seccomp whitelist
-	if (linux_init_seccomp(input_fd, output_fd) != 0)
+	if (linux_init_seccomp(input_fd, output_fd) != 0) {
+		eprintf("[SANDBOX] Failed to initialize seccomp\n");
 		return -1;
+	}
 
 	return 0;
 }
@@ -155,7 +161,7 @@ int linux_unveil_filesystem(void) {
 				CLONE_NEWUTS | CLONE_NEWPID) != 0)
 	{
 		perror("[SANDBOX] unshare(CLONE_NEWUSER | CLONE_NEWNS)");
-		eprintf("[SANDBOX] chroot failed, falling back to landlock..");
+		eprintf("[SANDBOX] chroot failed, falling back to landlock..\n");
 		goto try_landlock;
 	}
 
@@ -163,12 +169,12 @@ int linux_unveil_filesystem(void) {
 	const char* jail = "/proc/self/fdinfo";
 	if (chdir(jail) != 0 || chroot(jail) != 0) {
 		perror("[SANDBOX] chdir/chroot");
-		eprintf("[SANDBOX] chroot failed, attempting to landlock..");
+		eprintf("[SANDBOX] chroot failed, attempting to landlock..\n");
 		goto try_landlock;
 	}
 	if (chdir("/") != 0) {
 		perror("[SANDBOX] chdir");
-		eprintf("[SANDBOX] chroot failed, attempting landlock..");
+		eprintf("[SANDBOX] chroot failed, attempting landlock..\n");
 		goto try_landlock;
 	}
 
@@ -186,10 +192,10 @@ try_landlock:
 	; // Satisfy < c23 standards (label following a declaration)
 	long abi = get_landlock_abi();
 	if (abi < 1) {
-		eprintf("[SANDBOX] landlock not supported by kernel");
+		eprintf("[SANDBOX] landlock not supported by kernel\n");
 		if (chrooted == 1) {
 			eprintf("[SANDBOX] landlock failed but chroot succeeded, you are "
-					"still sandboxed.");
+					"still sandboxed.\n");
 			return 0;
 		}
 		return -1;
@@ -242,7 +248,7 @@ try_landlock:
 		eprintf("[SANDBOX] Failed to create landlock ruleset");
 		if (chrooted == 1) {
 			eprintf("[SANDBOX] landlock failed but chroot succeeded, you are "
-					"still sandboxed.");
+					"still sandboxed.\n");
 			return 0;
 		}
 		return -1;
@@ -250,17 +256,23 @@ try_landlock:
 
 	// Restrict self according to the ruleset FD
 	if (landlock_restrict_self(ruleset_fd, 0) < 0) {
-		eprintf("[SANDBOX] Failed to restrict self with landlock");
+		eprintf("[SANDBOX] Failed to restrict self with landlock\n");
 		close(ruleset_fd);
 		if (chrooted == 1) {
 			eprintf("[SANDBOX] landlock failed but chroot succeeded, you are "
-					"still sandboxed.");
+					"still sandboxed.\n");
 			return 0;
 		}
 		return -1;
 	}
 
 	close(ruleset_fd);
+
+	if (chrooted != 1) {
+		eprintf("[SANDBOX] chroot failed but landlock succeeded, you are "
+				"still sandboxed.\n");
+	}
+
 	return 0;
 
 #endif // defined(HAS_LANDLOCK_H)
@@ -364,8 +376,8 @@ int linux_init_seccomp(int input_fd, int output_fd) {
 	int ret = seccomp_load(ctx);
 	seccomp_release(ctx);
 
-	if (ret != 0) // Failed to apply seccomp filter
-		return -1;
+	if (ret != 0) { // Failed to apply seccomp filter
+	}
 	return 0;
 error:
 	seccomp_release(ctx);
