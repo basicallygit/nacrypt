@@ -18,8 +18,12 @@ jobs:
     - name: Install dependencies
       run: sudo apt-get install -y libsodium-dev libseccomp-dev libcap-dev
     - name: make
-      run: make CLANG_CFI=y TIGHTENED_SANDBOX=y
+      run: make CLANG_CFI=y
     - name: make test
-      run: make CLANG_CFI=y TIGHTENED_SANDBOX=y test
+      run: make CLANG_CFI=y test
+    - name: make with GCC
+      run: make clean && make CC=gcc
+    - name: make with NO_SANDBOX=y
+      run: make clean && make NO_SANDBOX=y
     - name: make install
       run: sudo make install
