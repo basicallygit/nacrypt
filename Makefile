@@ -40,7 +40,7 @@ endif
 all: $(TARGET)
 
 $(TARGET): $(OBJ)
-	$(CC) -s $(CFLAGS) $(HARDENING_CFLAGS) $(LDFLAGS) $(HARDENING_LDFLAGS) -o $@ $^
+	$(CC) -s $(CFLAGS) $(HARDENING_CFLAGS) $(HARDENING_LDFLAGS) -o $@ $^ $(LDFLAGS)
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(HARDENING_CFLAGS) -c $< -o $@
