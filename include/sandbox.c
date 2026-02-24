@@ -106,6 +106,9 @@ int freebsd_enter_sandbox(int input_fd, int output_fd);
 
 int apply_sandbox(int input_fd, int output_fd) {
 #if defined(NO_SANDBOX)
+	// Tell the compiler to ignore unused parameter for NO_SANDBOX here
+	(void)input_fd;
+	(void)output_fd;
 	return -1;
 #else // !defined(NO_SANDBOX)
 #if defined(__linux__)
@@ -120,6 +123,8 @@ int apply_sandbox(int input_fd, int output_fd) {
 #endif // OS CHECKS
 #endif // defined(NO_SANDBOX) || !defined(NO_SANDBOX)
 }
+
+#if !defined(NO_SANDBOX)
 
 #if defined(__linux__)
 // Forward definitions
@@ -192,12 +197,11 @@ try_landlock:
 	; // Satisfy < c23 standards (label following a declaration)
 	long abi = get_landlock_abi();
 	if (abi < 1) {
-		eprintf("[SANDBOX] landlock not supported by kernel\n");
 		if (chrooted == 1) {
-			eprintf("[SANDBOX] landlock failed but chroot succeeded, you are "
-					"still sandboxed.\n");
+			// Landlock didnt work but chroot did, still well sandboxed
 			return 0;
 		}
+		eprintf("[SANDBOX] landlock not supported by kernel\n");
 		return -1;
 	}
 
@@ -245,24 +249,22 @@ try_landlock:
 	// Create a ruleset file descriptor
 	int ruleset_fd = (int)landlock_create_ruleset(&ruleset_attr, size, 0);
 	if (ruleset_fd < 0) {
-		eprintf("[SANDBOX] Failed to create landlock ruleset");
 		if (chrooted == 1) {
-			eprintf("[SANDBOX] landlock failed but chroot succeeded, you are "
-					"still sandboxed.\n");
+			// Landlock didnt work but chroot did, still well sandboxed
 			return 0;
 		}
+		eprintf("[SANDBOX] Failed to create landlock ruleset");
 		return -1;
 	}
 
 	// Restrict self according to the ruleset FD
 	if (landlock_restrict_self(ruleset_fd, 0) < 0) {
-		eprintf("[SANDBOX] Failed to restrict self with landlock\n");
 		close(ruleset_fd);
 		if (chrooted == 1) {
-			eprintf("[SANDBOX] landlock failed but chroot succeeded, you are "
-					"still sandboxed.\n");
+			// Landlock didnt work but chroot did, still well sandboxed
 			return 0;
 		}
+		eprintf("[SANDBOX] Failed to restrict self with landlock\n");
 		return -1;
 	}
 
@@ -270,12 +272,16 @@ try_landlock:
 
 	if (chrooted != 1) {
 		eprintf("[SANDBOX] chroot failed but landlock succeeded, you are "
-				"still sandboxed.\n");
+				"still decently sandboxed.\n");
 	}
 
 	return 0;
 
 #endif // defined(HAS_LANDLOCK_H)
+	// No landlock.h, return 0 if chroot worked, else -1
+	if (chrooted == 1)
+		return 0;
+	return -1;
 }
 
 int linux_drop_all_caps(void) {
@@ -421,3 +427,5 @@ int freebsd_enter_sandbox(int input_fd, int output_fd) {
 	return 0;
 }
 #endif // defined(__FreeBSD__)
+
+#endif // !defined(NO_SANDBOX)

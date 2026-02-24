@@ -25,10 +25,11 @@ paru/yay -S nacrypt
 # Building
 ### Dependencies
 Install [libsodium](https://doc.libsodium.org/installation)<br>
-libseccomp (sandboxing)<br>
-libcap (tightened sandbox)<br>
+libseccomp (sandbox on linux)<br>
+libcap (sandbox on linux)<br>
 Debian / Ubuntu: `sudo apt install -y libsodium-dev libseccomp-dev libcap-dev`<br>
 Arch & Derivatives: `sudo pacman -S --needed libsodium libseccomp libcap`
+libseccomp and libcap are not necessary on \*BSD systems, or when `NO_SANDBOX=y` is set
 
 ### To build:
 ```sh
