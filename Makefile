@@ -2,7 +2,7 @@ CC = clang
 CFLAGS = -std=gnu17 -O2 -fPIC -Wall -Wpedantic -Wextra -Wno-missing-field-initializers -Wno-unused-command-line-argument -Iinclude/ -I. -I/usr/local/include -L/usr/local/lib
 LDFLAGS = -lsodium
 HARDENING_CFLAGS = -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -fstack-protector-all \
-	-fstack-clash-protection -fno-delete-null-pointer-checks \
+	-fstack-clash-protection -fno-delete-null-pointer-checks -fcf-protection \
 	-Wconversion -Werror=conversion -Wsign-conversion -Werror=sign-conversion \
 	-Wimplicit-fallthrough -Werror=implicit-fallthrough -Wformat -Wformat=2 -Werror=format
 HARDENING_LDFLAGS = -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack -fPIE -pie

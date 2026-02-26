@@ -174,12 +174,12 @@ int linux_unveil_filesystem(void) {
 	const char* jail = "/proc/self/fdinfo";
 	if (chdir(jail) != 0 || chroot(jail) != 0) {
 		perror("[SANDBOX] chdir/chroot");
-		eprintf("[SANDBOX] chroot failed, attempting to landlock..\n");
+		eprintf("[SANDBOX] chroot failed, falling back to landlock..\n");
 		goto try_landlock;
 	}
 	if (chdir("/") != 0) {
 		perror("[SANDBOX] chdir");
-		eprintf("[SANDBOX] chroot failed, attempting landlock..\n");
+		eprintf("[SANDBOX] chroot failed, falling back to landlock..\n");
 		goto try_landlock;
 	}
 
