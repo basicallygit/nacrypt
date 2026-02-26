@@ -382,8 +382,11 @@ int linux_init_seccomp(int input_fd, int output_fd) {
 	int ret = seccomp_load(ctx);
 	seccomp_release(ctx);
 
-	if (ret != 0) { // Failed to apply seccomp filter
+	if (ret != 0) {
+		eprintf("Failed to apply seccomp filter\n");
+		return -1;
 	}
+
 	return 0;
 error:
 	seccomp_release(ctx);
