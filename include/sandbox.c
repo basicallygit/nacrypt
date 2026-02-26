@@ -8,6 +8,7 @@
 
 #if defined(__linux__)
 #include <errno.h>
+#include <linux/types.h>
 #include <sched.h>
 #include <seccomp.h>
 #include <stddef.h>
@@ -18,7 +19,6 @@
 #include <sys/prctl.h>
 #if defined(HAS_LANDLOCK_H)
 #include <linux/landlock.h>
-#include <linux/types.h>
 #include <sys/syscall.h>
 
 // defined undefined ACCESS_FS bits for older landlock.h headers
@@ -185,6 +185,19 @@ int linux_unveil_filesystem(void) {
 
 	// If landlock fails, chrooted = 1 will cause it to be non-fatal
 	chrooted = 1;
+
+	// Become nobody, not fatal if it fails since this isnt really needed
+	// due to seccomp already blocking most potentially exploitable syscalls
+	const uid_t nobody_uid = 65534;
+	const gid_t nobody_gid = 65534;
+
+	if (setresgid(nobody_gid, nobody_gid, nobody_gid) != 0) {
+		// Non-fatal, do nothing
+	}
+
+	if (setresuid(nobody_uid, nobody_uid, nobody_uid) != 0) {
+		// Non-fatal, do nothing
+	}
 
 	// Also attempt to landlock for extra protections against chroot escapes
 	// This will usually be the only unveil protection if usernamespaces are
