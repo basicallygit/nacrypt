@@ -33,6 +33,9 @@ enum Mode {
 };
 
 int main(int argc, char** argv) {
+	// Stop musl libc from using ioctl
+	setvbuf(stdout, NULL, _IOLBF, BUFSIZ);
+
 	if (argc == 2) {
 		if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
 			print_usage(stdout);

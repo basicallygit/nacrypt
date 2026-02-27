@@ -139,7 +139,7 @@ int linux_enter_sandbox(int input_fd, int output_fd) {
 		return -1;
 	}
 
-	// Hide filesystem from view (landlock or fallback to chroot)
+	// Hide filesystem from view (chroot or fallback to landlock)
 	if (linux_unveil_filesystem() != 0) {
 		eprintf("[SANDBOX] Failed to unveil filesystem\n");
 		return -1;
@@ -363,8 +363,14 @@ int linux_init_seccomp(int input_fd, int output_fd) {
 		// read
 		ALLOW_RULE(ctx, read, 1,
 				   SCMP_A0(SCMP_CMP_EQ, (scmp_datum_t)fd_whitelist[i]));
+		// readv
+		ALLOW_RULE(ctx, readv, 1,
+				   SCMP_A0(SCMP_CMP_EQ, (scmp_datum_t)fd_whitelist[i]));
 		// write
 		ALLOW_RULE(ctx, write, 1,
+				   SCMP_A0(SCMP_CMP_EQ, (scmp_datum_t)fd_whitelist[i]));
+		// writev
+		ALLOW_RULE(ctx, writev, 1,
 				   SCMP_A0(SCMP_CMP_EQ, (scmp_datum_t)fd_whitelist[i]));
 		// lseek
 		ALLOW_RULE(ctx, lseek, 1,
