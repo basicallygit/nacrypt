@@ -315,6 +315,7 @@ int encrypt_file_asymmetric(FILE* input_file, FILE* output_file,
 	if (input_file == NULL || output_file == NULL || recipient_pubkey == NULL)
 		return -1;
 	const unsigned char SYMMETRY_BYTE = SYMMETRY_ASYMMETRIC;
+	const unsigned char num_recipients_byte = 1; // Reserved as 1 for now
 	unsigned char* key = sodium_malloc(KEY_LEN);
 	if (key == NULL) {
 		perror("FATAL: sodium_malloc()");
@@ -340,6 +341,7 @@ int encrypt_file_asymmetric(FILE* input_file, FILE* output_file,
 	if (fwrite(NACRYPT_MAGIC, sizeof(NACRYPT_MAGIC), 1, output_file) != 1 ||
 		fwrite(&HEADER_VERSION_BYTE, 1, 1, output_file) != 1 ||
 		fwrite(&SYMMETRY_BYTE, 1, 1, output_file) != 1 ||
+		fwrite(&num_recipients_byte, 1, 1, output_file) != 1 ||
 		fwrite(sealed_box, box_len, 1, output_file) != 1)
 	{
 		perror("FATAL: fwrite");
@@ -474,6 +476,17 @@ int decrypt_file_asymmetric(FILE* input_file, FILE* output_file,
 		return -1;
 	// This function assumes the file offset is currently directly after
 	// SYMMETRY_BYTE
+	unsigned char num_recipients_byte;
+	if (fread(&num_recipients_byte, 1, 1, input_file) != 1) {
+		eprintf("FATAL: Failed to read number of recipients\n");
+		return -1;
+	}
+
+	if (num_recipients_byte != 1) {
+		eprintf("FATAL: This version of nacrypt does not support multiple "
+				"recipients yet!\n");
+		return -1;
+	}
 
 	// Get the public key back from the private key, needed to open the box
 	unsigned char public_key[crypto_box_PUBLICKEYBYTES];
