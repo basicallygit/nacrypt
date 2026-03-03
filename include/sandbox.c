@@ -97,26 +97,27 @@ static long landlock_restrict_self(int ruleset_fd, uint32_t flags) {
 
 // Forward definitions
 #if defined(__linux__)
-int linux_enter_sandbox(int input_fd, int output_fd);
+int linux_enter_sandbox(int input_fd, int output_fd, int secret_key_fd);
 #elif defined(__OpenBSD__)
 int openbsd_enter_sandbox(void);
 #elif defined(__FreeBSD__)
-int freebsd_enter_sandbox(int input_fd, int output_fd);
+int freebsd_enter_sandbox(int input_fd, int output_fd, int secret_key_fd);
 #endif // OS CHECKS
 
-int apply_sandbox(int input_fd, int output_fd) {
+int apply_sandbox(int input_fd, int output_fd, int secret_key_fd) {
 #if defined(NO_SANDBOX)
 	// Tell the compiler to ignore unused parameter for NO_SANDBOX here
 	(void)input_fd;
 	(void)output_fd;
+	(void)secret_key_fd;
 	return -1;
 #else // !defined(NO_SANDBOX)
 #if defined(__linux__)
-	return linux_enter_sandbox(input_fd, output_fd);
+	return linux_enter_sandbox(input_fd, output_fd, secret_key_fd);
 #elif defined(__OpenBSD__)
 	return openbsd_enter_sandbox();
 #elif defined(__FreeBSD__)
-	return freebsd_enter_sandbox(input_fd, output_fd);
+	return freebsd_enter_sandbox(input_fd, output_fd, secret_key_fd);
 #else
 	// Fallback for non-supported OS
 	return -1;
@@ -130,9 +131,9 @@ int apply_sandbox(int input_fd, int output_fd) {
 // Forward definitions
 int linux_unveil_filesystem(void);
 int linux_drop_all_caps(void);
-int linux_init_seccomp(int input_fd, int output_fd);
+int linux_init_seccomp(int input_fd, int output_fd, int secret_key_fd);
 
-int linux_enter_sandbox(int input_fd, int output_fd) {
+int linux_enter_sandbox(int input_fd, int output_fd, int secret_key_fd) {
 	// Prevent gaining of new privileges (required for landlock and seccomp)
 	if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
 		perror("[SANDBOX] prctl(PR_SET_NO_NEW_PRIVS)");
@@ -152,7 +153,7 @@ int linux_enter_sandbox(int input_fd, int output_fd) {
 	}
 
 	// Filter all syscalls through a seccomp whitelist
-	if (linux_init_seccomp(input_fd, output_fd) != 0) {
+	if (linux_init_seccomp(input_fd, output_fd, secret_key_fd) != 0) {
 		eprintf("[SANDBOX] Failed to initialize seccomp\n");
 		return -1;
 	}
@@ -323,9 +324,9 @@ int linux_drop_all_caps(void) {
 	return 0;
 }
 
-int linux_init_seccomp(int input_fd, int output_fd) {
-	int fd_whitelist[] = {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, input_fd,
-						  output_fd};
+int linux_init_seccomp(int input_fd, int output_fd, int secret_key_fd) {
+	int fd_whitelist[] = {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO,
+						  input_fd,		output_fd,	   secret_key_fd};
 	int fd_count = sizeof(fd_whitelist) / sizeof(fd_whitelist[0]);
 
 #if defined(NACRYPT_SECCOMP_DEBUG)
@@ -360,6 +361,8 @@ int linux_init_seccomp(int input_fd, int output_fd) {
 		ctx, madvise, 1,
 		SCMP_A2(SCMP_CMP_MASKED_EQ, MADV_SOFT_OFFLINE | MADV_HWPOISON, 0));
 	for (int i = 0; i < fd_count; i++) {
+		if (fd_whitelist[i] == -1) // Ignore invalid secret_key_fd -1
+			continue;
 		// read
 		ALLOW_RULE(ctx, read, 1,
 				   SCMP_A0(SCMP_CMP_EQ, (scmp_datum_t)fd_whitelist[i]));
@@ -427,9 +430,9 @@ int openbsd_enter_sandbox(void) {
 #endif // defined(__OpenBSD__)
 
 #if defined(__FreeBSD__)
-int freebsd_enter_sandbox(int input_fd, int output_fd) {
-	int fd_whitelist[] = {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, input_fd,
-						  output_fd};
+int freebsd_enter_sandbox(int input_fd, int output_fd, int secret_key_fd) {
+	int fd_whitelist[] = {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO,
+						  input_fd,		output_fd,	   secret_key_fd};
 	int fd_count = sizeof(fd_whitelist) / sizeof(fd_whitelist[0]);
 	unsigned long ioctl_cmds[] = {TIOCGWINSZ, TIOCGETA};
 
@@ -438,6 +441,8 @@ int freebsd_enter_sandbox(int input_fd, int output_fd) {
 					CAP_IOCTL);
 
 	for (int i = 0; i < fd_count; i++) {
+		if (fd_whitelist[i] == -1) // Ignore invalid secret_key_fd -1
+			continue;
 		if (cap_rights_limit(fd_whitelist[i], &rights) != 0)
 			return -1;
 		if (cap_ioctls_limit(fd_whitelist[i], ioctl_cmds, 2) != 0)

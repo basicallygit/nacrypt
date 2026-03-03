@@ -10,19 +10,21 @@
 #include <stdio.h>
 #include <string.h>
 
-#define MAX_PASSWORD_SIZE 512
+#define NACRYPT_HELP_MESSAGE                                                   \
+	"Usage: nacrypt <inputfile> -o <outputfile> [-e,-d,-r,-p,-vv]\n\n"         \
+	"Options:\n"                                                               \
+	"  -h, --help                Display this help message\n"                  \
+	"  -o, --output <filename>   Output to <filename>\n"                       \
+	"  -e, --encrypt [optional]  Specify encrypt mode\n"                       \
+	"  -d, --decrypt [optional]  Specify decrypt mode\n"                       \
+	"  -g, --gen-key             Generate a new keypair\n"                     \
+	"  -r, --recipient <pubkey>  Encrypt this file to <pubkey>\n"              \
+	"  -p, --private-key <path>  Specify custom path to private key\n"         \
+	"  -v, --version             Print nacrypt version info\n"                 \
+	"  -vv, --verbose            Print verbose output\n"
 
 void print_usage(FILE* stream) {
-	fprintf(stream,
-			"Usage: nacrypt <inputfile> -o <outputfile> [-e,-d,-vv]\n\n");
-	fprintf(stream, "Options:\n");
-	fprintf(stream, "  -h | --help: Display this help message\n");
-	fprintf(stream, "  -o | --output <filename>: Output to <filename>\n");
-	fprintf(stream, "  -e | --encrypt: [optional] specify encrypt mode\n");
-	fprintf(stream, "  -d | --decrypt: [optional] specify decrypt mode\n");
-	fprintf(stream,
-			"  -v | --version: [optional] print the nacrypt version info\n");
-	fprintf(stream, "  -vv | --verbose: [optional] print verbose output\n");
+	fprintf(stream, NACRYPT_HELP_MESSAGE);
 	fflush(stream);
 }
 
@@ -36,9 +38,28 @@ int main(int argc, char** argv) {
 	// Stop musl libc from using ioctl
 	setvbuf(stdout, NULL, _IOLBF, BUFSIZ);
 
+	// Make sure no NULL arguments
+	for (int x = 0; x < argc; x++) {
+		if (argv[x] == NULL) {
+			eprintf("FATAL: NULL argument\n");
+			return 1;
+		}
+	}
+
 	if (argc == 2) {
 		if (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0) {
 			print_usage(stdout);
+			return 0;
+		} else if (strcmp(argv[1], "-g") == 0 ||
+				   strcmp(argv[1], "--gen-key") == 0)
+		{
+			if (sodium_init() != 0) {
+				eprintf("FATAL: sodium_init() failed\n");
+				return 1;
+			}
+
+			if (generate_keypair() != 0)
+				return 1;
 			return 0;
 		} else if (strcmp(argv[1], "-v") == 0 ||
 				   strcmp(argv[1], "--version") == 0)
@@ -49,16 +70,17 @@ int main(int argc, char** argv) {
 			return 0;
 		}
 	}
-	if (argc < 4 || argc > 6) {
+	if (argc < 4 || argc > 9) {
 		print_usage(stderr);
 		return 1;
 	}
 
 	char* input_filename = NULL;
 	char* output_filename = NULL;
+	char* recipient_pubkey_armored = NULL;
+	char* custom_secret_key_path = NULL;
 	enum Mode mode = UNSPECIFIED;
 	int verbose = 0;
-
 	for (int i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "-o") == 0 || strcmp(argv[i], "--output") == 0) {
 			if (i == argc - 1) { // No more arguments
@@ -75,6 +97,25 @@ int main(int argc, char** argv) {
 				   strcmp(argv[i], "--decrypt") == 0)
 		{
 			mode = DECRYPT;
+		} else if (strcmp(argv[i], "-r") == 0 ||
+				   strcmp(argv[i], "--recipient") == 0)
+		{
+			if (i == argc - 1) {
+				eprintf("FATAL: No public key given after %s\n", argv[i]);
+				return -1;
+			}
+
+			recipient_pubkey_armored = argv[i + 1];
+			i++;
+		} else if (strcmp(argv[i], "-p") == 0 ||
+				   strcmp(argv[i], "--private-key") == 0)
+		{
+			if (i == argc - 1) {
+				eprintf("FATAL: No path given after %s\n", argv[i]);
+				return -1;
+			}
+			custom_secret_key_path = argv[i + 1];
+			i++;
 		} else if (strcmp(argv[i], "-vv") == 0 ||
 				   strcmp(argv[i], "--verbose") == 0)
 		{
@@ -117,14 +158,39 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
+	// Open the private key file now even if not needed, as fopen() will be
+	// blocked once sandboxed. Note that this will deliberately be left open
+	// until the end, to prevent its file descriptor being reclaimed
+	FILE* fp_secret_key = NULL;
+	const char* homedir = getenv("HOME");
+	if (custom_secret_key_path != NULL) {
+		fp_secret_key = fopen(custom_secret_key_path, "rb");
+	} else {
+		if (homedir != NULL) {
+			fp_secret_key = fopen_from(homedir, SECRET_KEY_PATH, "rb");
+		}
+	}
+
+// Safe to call at any point
+#define CLOSE_SECRET()                                                         \
+	do {                                                                       \
+		if (fp_secret_key != NULL) {                                           \
+			fclose(fp_secret_key);                                             \
+			fp_secret_key = NULL;                                              \
+		}                                                                      \
+	} while (0)
+
 #if !defined(NO_SANDBOX)
 	int input_fd = fileno(fp_input);
 	int output_fd = fileno(fp_output);
+	int secret_key_fd = -1; // Will be skipped over unless fopen succeeded
+	if (fp_secret_key != NULL)
+		secret_key_fd = fileno(fp_secret_key);
 
 	if (verbose == 1) {
 		puts("[VERBOSE] Applying sandbox..");
 	}
-	if (apply_sandbox(input_fd, output_fd) != 0) {
+	if (apply_sandbox(input_fd, output_fd, secret_key_fd) != 0) {
 #if defined(ALLOW_SANDBOX_FAIL)
 		eprintf("WARNING: Failed to apply sandbox.. (non-fatal because of "
 				"-DALLOW_SANDBOX_FAIL)\n");
@@ -145,145 +211,199 @@ int main(int argc, char** argv) {
 		goto error;
 	}
 
-	const unsigned char NACRYPT_MAGIC[4] = {0x4E, 0x41, 0x1F, 0xF0};
-	unsigned char magic_buf[4];
-	uint32_t opslimit = NACRYPT_OPSLIMIT_DEFAULT;
-	uint32_t memlimit = NACRYPT_MEMLIMIT_DEFAULT;
+	int symmetry = 99; // Dummy value
 
-	if (mode != ENCRYPT) { // Attempt to parse header (decrypt or unspecified)
-		if (fread(magic_buf, 1, 4, fp_input) == 4 &&
-			memcmp(NACRYPT_MAGIC, magic_buf, 4) == 0 &&
-			fread(&opslimit, sizeof(opslimit), 1, fp_input) == 1 &&
-			fread(&memlimit, sizeof(memlimit), 1, fp_input) == 1)
+	if (mode == DECRYPT || mode == UNSPECIFIED) {
+		// Check if the input file is a nacrypt file. If it isnt, assume user
+		// wants to decrypt it UNLESS --decrypt was explicitly given, in which
+		// case bail out
+		unsigned char magic_buf[4];
+		unsigned char header_version_byte;
+		unsigned char symmetry_byte;
+		if (fread(magic_buf, sizeof(magic_buf), 1, fp_input) != 1 ||
+			memcmp(magic_buf, NACRYPT_MAGIC, sizeof(magic_buf)) != 0 ||
+			fread(&header_version_byte, 1, 1, fp_input) != 1 ||
+			fread(&symmetry_byte, 1, 1, fp_input) != 1)
 		{
-			// Stored in network order, convert back to host endian
-			opslimit = ntohl(opslimit);
-			memlimit = ntohl(memlimit);
-			if (opslimit == 0) {
-				eprintf("FATAL: %s: Invalid OPSLIMIT in header\n",
-						input_filename);
-				goto error;
-			}
-			if (memlimit == 0) {
-				eprintf("FATAL: %s: Invalid MEMLIMIT in header\n",
-						input_filename);
-				goto error;
-			}
-			// Valid header, opslimit and memlimit have already been set,
-			// file offset is now at the start of the encrypted data.
-			// Set mode to decrypt in-case it was unspecified, as this is a
-			// valid nacrypt file to decrypt
-			if (verbose == 1)
-				printf("[VERBOSE] Found nacrypt header; opslimit: %" PRIu32
-					   ", memlimit: %" PRIu32 "\n",
-					   opslimit, memlimit);
-			mode = DECRYPT;
-		} else {
-			if (mode == DECRYPT) {
+			// Incomplete read
+			if (mode == UNSPECIFIED) {
+				// Not valid, assume user wants to encrypt
+				rewind(fp_input);
+				mode = ENCRYPT;
+			} else {
 				eprintf("FATAL: %s: Not a nacrypt file\n", input_filename);
 				goto error;
-			} else {
-				if (verbose == 1)
-					puts("[VERBOSE] Treating file as encrypt since no valid "
-						 "header found");
-				// No valid nacrypt header found, treat as ENCRYPT
-				mode = ENCRYPT;
-				// Go back to the start to make sure the whole file is encrypted
-				rewind(fp_input);
 			}
-		}
-	}
-
-	if (mode == ENCRYPT)
-		printf("Please create a password: ");
-	else
-		printf("Please enter password: ");
-	fflush(stdout);
-
-	// Sensitive memory, allocate using sodium_malloc for guard pages and no
-	// swapping
-	char* password = (char*)sodium_malloc(MAX_PASSWORD_SIZE);
-	if (password == NULL) {
-		eprintf("FATAL: sodium_malloc() failed: %s\n", strerror(errno));
-		goto error;
-	}
-
-	if (fgets(password, MAX_PASSWORD_SIZE, stdin) != NULL) {
-		password[strcspn(password, "\n")] = '\0';
-	} else {
-		perror("FATAL: fgets");
-		sodium_free(password);
-		goto error;
-	}
-
-	if (mode == ENCRYPT) {
-		printf("Enter password again: ");
-		fflush(stdout);
-		char* password_again = (char*)sodium_malloc(MAX_PASSWORD_SIZE);
-		if (password_again == NULL) {
-			eprintf("FATAL: sodium_malloc() failed: %s\n", strerror(errno));
-			sodium_free(password); // Free the first password because we are
-								   // going to quit
-			goto error;
-		}
-
-		if (fgets(password_again, MAX_PASSWORD_SIZE, stdin) != NULL) {
-			password_again[strcspn(password_again, "\n")] = '\0';
 		} else {
-			perror("FATAL: fgets");
-			sodium_free(password);
-			sodium_free(password_again);
-			goto error;
-		}
+			// Valid header
+			mode = DECRYPT;
+			if (header_version_byte != 1) {
+				eprintf("FATAL: %s: Unknown nacrypt format version, possibly "
+						"outdated program?\n",
+						input_filename);
+				goto error;
+			}
 
-		if (sodium_memcmp(password, password_again, MAX_PASSWORD_SIZE) != 0) {
-			eprintf("FATAL: Passwords didn't match!\n");
-			sodium_free(password);
-			sodium_free(password_again);
-			goto error;
+			if (symmetry_byte != SYMMETRY_SYMMETRIC &&
+				symmetry_byte != SYMMETRY_ASYMMETRIC)
+			{
+				eprintf(
+					"FATAL: %s: Invalid symmetry byte: %02x, expected %02x\n",
+					input_filename, symmetry_byte, SYMMETRY_SYMMETRIC);
+				goto error;
+			}
+
+			symmetry = symmetry_byte;
 		}
-		sodium_free(password_again); // We wont need it again, only temporary
 	}
 
 	if (mode == ENCRYPT) {
-		opslimit = NACRYPT_OPSLIMIT_DEFAULT;
-		memlimit = NACRYPT_MEMLIMIT_DEFAULT;
-		// Write bytes in network order
-		uint32_t net_opslimit = htonl(opslimit);
-		uint32_t net_memlimit = htonl(memlimit);
-		if (fwrite(NACRYPT_MAGIC, 1, 4, fp_output) != 4 ||
-			fwrite(&net_opslimit, sizeof(net_opslimit), 1, fp_output) != 1 ||
-			fwrite(&net_memlimit, sizeof(net_memlimit), 1, fp_output) != 1)
-		{
-			perror("FATAL: fwrite");
+		if (recipient_pubkey_armored != NULL) {
+			// Public key was provided, asymmetric encrypt mode
+			unsigned char recipient_public_key[crypto_box_PUBLICKEYBYTES];
+			if (dearmor_public_key(recipient_pubkey_armored,
+								   recipient_public_key) != 0)
+			{
+				eprintf("FATAL: %s: Not a valid nacrypt public key\n",
+						recipient_pubkey_armored);
+				goto error;
+			}
+
+			if (encrypt_file_asymmetric(fp_input, fp_output,
+										recipient_public_key) != 0)
+			{
+				eprintf("FATAL: Failed to encrypt file\n");
+				goto error;
+			}
+		} else {
+			// Symmetric encrypt mode
+			printf("Please create a password: ");
+			fflush(stdout);
+
+			char* password = read_password(MAX_PASSWORD_SIZE);
+			if (password == NULL) {
+				goto error;
+			}
+
+			printf("Enter password again: ");
+			fflush(stdout);
+
+			char* password_again = read_password(MAX_PASSWORD_SIZE);
+			if (password_again == NULL) {
+				sodium_free(password);
+				goto error;
+			}
+
+			if (sodium_memcmp(password, password_again, MAX_PASSWORD_SIZE) != 0)
+			{
+				eprintf("FATAL: Passwords did not match\n");
+				sodium_free(password);
+				sodium_free(password_again);
+				goto error;
+			}
+
+			sodium_free(password_again);
+
+			if (encrypt_file_symmetric(fp_input, fp_output, password) != 0) {
+				eprintf("FATAL: Failed to encrypt file\n");
+				sodium_free(password);
+				goto error;
+			}
+
 			sodium_free(password);
-			goto error;
-		}
-		if (encrypt_file(fp_input, fp_output, password,
-						 (unsigned long long)opslimit, (size_t)memlimit) != 0)
-		{
-			sodium_free(password);
-			goto error;
 		}
 	} else if (mode == DECRYPT) {
-		if (decrypt_file(fp_input, fp_output, password,
-						 (unsigned long long)opslimit, (size_t)memlimit) != 0)
-		{
+		if (symmetry == SYMMETRY_ASYMMETRIC) {
+			// Asymmetric decrypt
+
+			// Secret key couldn't be opened or couldn't get $HOME
+			if (fp_secret_key == NULL) {
+				if (custom_secret_key_path != NULL) {
+					eprintf("FATAL: Failed to open %s\n",
+							custom_secret_key_path);
+				} else {
+					if (homedir == NULL) {
+						eprintf(
+							"FATAL: Failed to get home directory from $HOME\n");
+					} else {
+						eprintf("FATAL: Failed to open %s%s\n", homedir,
+								SECRET_KEY_PATH);
+					}
+				}
+				goto error;
+			}
+
+			if (custom_secret_key_path != NULL) {
+				printf("Please enter password for %s: ",
+					   custom_secret_key_path);
+			} else {
+				if (homedir == NULL) {
+					eprintf("FATAL: UNREACHABLE\n");
+					goto error;
+				}
+				printf("Please enter password for %s%s: ", homedir,
+					   SECRET_KEY_PATH);
+			}
+			fflush(stdout);
+
+			char* password = read_password(MAX_PASSWORD_SIZE);
+			if (password == NULL) {
+				goto error;
+			}
+
+			unsigned char* secret_key =
+				sodium_malloc(crypto_box_SECRETKEYBYTES);
+			if (secret_key == NULL) {
+				perror("FATAL: sodium_malloc()");
+				sodium_free(password);
+				goto error;
+			}
+
+			if (read_secret_key(fp_secret_key, secret_key, password) != 0) {
+				sodium_free(password);
+				sodium_free(secret_key);
+				goto error; // Error already printed for us
+			}
+
 			sodium_free(password);
-			goto error;
+
+			if (decrypt_file_asymmetric(fp_input, fp_output, secret_key) != 0) {
+				eprintf("FATAL: Failed to decrypt file\n");
+				sodium_free(secret_key);
+				goto error;
+			}
+
+			sodium_free(secret_key);
+		} else {
+			// Symmetric decrypt mode
+			printf("Password for %s: ", input_filename);
+			fflush(stdout);
+
+			char* password = read_password(MAX_PASSWORD_SIZE);
+			if (password == NULL) {
+				goto error;
+			}
+
+			if (decrypt_file_symmetric(fp_input, fp_output, password) != 0) {
+				eprintf("FATAL: Failed to decrypt file\n");
+				sodium_free(password);
+				goto error;
+			}
+
+			sodium_free(password);
 		}
 	} else {
-		eprintf("FATAL: UNREACHABLE: enum mode was UNSPECIFIED\n");
-		sodium_free(password);
+		eprintf("FATAL: UNREACHABLE\n");
 		goto error;
 	}
 
-	sodium_free(password);
+	CLOSE_SECRET();
 	fclose(fp_input);
 	fclose(fp_output);
 	return 0;
 
 error:
+	CLOSE_SECRET();
 	fclose(fp_input);
 	fclose(fp_output);
 	return 1;
