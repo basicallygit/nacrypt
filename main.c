@@ -268,9 +268,8 @@ int main(int argc, char** argv) {
 			if (symmetry_byte != SYMMETRY_SYMMETRIC &&
 				symmetry_byte != SYMMETRY_ASYMMETRIC)
 			{
-				eprintf(
-					"FATAL: %s: Invalid symmetry byte: %02x, expected %02x\n",
-					input_filename, symmetry_byte, SYMMETRY_SYMMETRIC);
+				eprintf("FATAL: %s: Invalid symmetry byte: %02x\n",
+						input_filename, symmetry_byte);
 				goto error;
 			}
 
