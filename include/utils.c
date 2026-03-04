@@ -12,7 +12,7 @@
 bool file_exists(const char* filename) {
 	FILE* file = fopen(filename, "rb");
 	if (file) {
-		fclose(file);
+		safe_fclose(file);
 		return true;
 	}
 	if (errno == EACCES)
@@ -27,7 +27,7 @@ bool file_is_empty(const char* filename) {
 
 	fseek(file, 0, SEEK_END);
 	long size = ftell(file);
-	fclose(file);
+	safe_fclose(file);
 
 	return size == 0;
 }
@@ -42,8 +42,45 @@ int make_dir(const char* path) {
 	return -1;
 }
 
-// Caller must sodium_free if non-NULL
+char yesno_defaultno_prompt(const char* const prompt) {
+	if (ferror(stdin) != 0 || feof(stdin) != 0) {
+		eprintf("FATAL: stdin failure\n");
+		return 'N';
+	}
+
+	char response[10] = {'\0'};
+
+	while (1) {
+		if (ferror(stdin) != 0 || feof(stdin) != 0) {
+			eprintf("FATAL: stdin failure\n");
+			return 'N';
+		}
+
+		printf("%s", prompt);
+		fflush(stdout);
+
+		if (fgets(response, sizeof(response), stdin) == NULL) {
+			perror("FATAL: fgets");
+			return 'N';
+		}
+
+		if (response[0] == 'y' || response[0] == 'Y')
+			return 'Y';
+		else if (response[0] == 'n' || response[0] == 'N' ||
+				 response[0] == '\n')
+		{
+			return 'N';
+		}
+	}
+}
+
+// Caller must safe_sodium_free if non-NULL
 char* read_password(size_t max_len) {
+	if (ferror(stdin) != 0 || feof(stdin) != 0) {
+		eprintf("FATAL: stdin failure\n");
+		return NULL;
+	}
+
 	char* password = (char*)sodium_malloc(max_len);
 	if (password == NULL) {
 		eprintf("FATAL: sodium_malloc() failed: %s\n", strerror(errno));

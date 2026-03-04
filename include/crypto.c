@@ -28,7 +28,6 @@ int derive_key(unsigned char* key, unsigned long long keylen,
 
 // Cannot be used inside sandbox as calls fopen()
 int generate_keypair(void) {
-	// Relative to $HOME
 	const char* homedir = getenv("HOME");
 	if (homedir == NULL) {
 		eprintf("FATAL: Failed to get home directory from $HOME\n");
@@ -58,7 +57,7 @@ int generate_keypair(void) {
 	unsigned char* secret_key = sodium_malloc(crypto_box_SECRETKEYBYTES);
 	if (secret_key == NULL) {
 		perror("FATAL: sodium_malloc()");
-		fclose(fp_secret_key);
+		safe_fclose(fp_secret_key);
 		return -1;
 	}
 
@@ -69,17 +68,20 @@ int generate_keypair(void) {
 	char* password = read_password(MAX_PASSWORD_SIZE);
 	if (password == NULL) {
 		// read_password() already prints what went wrong
-		fclose(fp_secret_key);
+		safe_sodium_free(secret_key);
+		safe_fclose(fp_secret_key);
 		return -1;
 	}
 
 	if (write_secret_key(fp_secret_key, secret_key, password) != 0) {
-		sodium_free(password);
-		fclose(fp_secret_key);
+		safe_sodium_free(secret_key);
+		safe_sodium_free(password);
+		safe_fclose(fp_secret_key);
 		return -1;
 	}
-	sodium_free(password);
-	fclose(fp_secret_key);
+	safe_sodium_free(secret_key);
+	safe_sodium_free(password);
+	safe_fclose(fp_secret_key);
 
 	// Armor the public key to be human readable (nacrypt_pubkey_<base64>)
 	const size_t b64_len = sodium_base64_ENCODED_LEN(
@@ -105,11 +107,98 @@ int generate_keypair(void) {
 	{
 		eprintf("FATAL: Failed to write public key to %s%s: %s\n", homedir,
 				PUBLIC_KEY_PATH, strerror(errno));
-		fclose(fp_public_key);
+		safe_fclose(fp_public_key);
 		return -1;
 	}
 
-	fclose(fp_public_key);
+	safe_fclose(fp_public_key);
+
+	printf("Saved public and private key to %s%s\n", homedir, NACRYPT_DIR_PATH);
+	fflush(stdout);
+	return 0;
+}
+
+// Recover the public key if the user has lost it.
+// Cannot be used inside sandbox as calls fopen()
+int regenerate_public_key(void) {
+	const char* homedir = getenv("HOME");
+	if (homedir == NULL) {
+		eprintf("FATAL: Failed to get home directory from $HOME\n");
+		return -1;
+	}
+
+	FILE* fp_secret_key = fopen_from(homedir, SECRET_KEY_PATH, "rb");
+	if (fp_secret_key == NULL) {
+		eprintf("FATAL: Failed to open %s%s: %s\n", homedir, SECRET_KEY_PATH,
+				strerror(errno));
+		return -1;
+	}
+
+	unsigned char* secret_key = sodium_malloc(crypto_box_SECRETKEYBYTES);
+	if (secret_key == NULL) {
+		perror("FATAL: sodium_malloc()");
+		safe_fclose(fp_secret_key);
+		return -1;
+	}
+
+	printf("Enter password for %s%s: ", homedir, SECRET_KEY_PATH);
+	fflush(stdout);
+	char* password = read_password(MAX_PASSWORD_SIZE);
+	if (password == NULL) {
+		// read_password() already prints what went wrong
+		safe_sodium_free(secret_key);
+		safe_fclose(fp_secret_key);
+		return -1;
+	}
+
+	if (read_secret_key(fp_secret_key, secret_key, password) != 0) {
+		safe_sodium_free(secret_key);
+		safe_sodium_free(password);
+		safe_fclose(fp_secret_key);
+		return -1;
+	}
+	safe_sodium_free(password);
+
+	unsigned char public_key[crypto_box_PUBLICKEYBYTES];
+	// Get the public key back from the secret key
+	crypto_scalarmult_base(public_key, secret_key);
+
+	// Not needed anymore
+	safe_sodium_free(secret_key);
+	safe_fclose(fp_secret_key);
+
+	// Armor the public key to be human readable (nacrypt_pubkey_<base64>)
+	const size_t b64_len = sodium_base64_ENCODED_LEN(
+		crypto_box_SECRETKEYBYTES, sodium_base64_VARIANT_ORIGINAL);
+	const size_t armored_pubkey_len = NACRYPT_PUBKEY_PREFIX_LEN + b64_len;
+	char armored_pubkey[armored_pubkey_len];
+	memcpy(armored_pubkey, NACRYPT_PUBKEY_PREFIX, NACRYPT_PUBKEY_PREFIX_LEN);
+	sodium_bin2base64(armored_pubkey + NACRYPT_PUBKEY_PREFIX_LEN, b64_len,
+					  public_key, crypto_box_PUBLICKEYBYTES,
+					  sodium_base64_VARIANT_ORIGINAL);
+
+	printf("Your public key: %s\n", armored_pubkey);
+
+	FILE* fp_public_key = fopen_from(homedir, PUBLIC_KEY_PATH, "wb");
+	if (fp_public_key == NULL) {
+		eprintf("FATAL: Failed to open %s%s: %s\n", homedir, PUBLIC_KEY_PATH,
+				strerror(errno));
+		return -1;
+	}
+
+	if (fwrite(armored_pubkey, armored_pubkey_len - 1, 1, fp_public_key) != 1 ||
+		fputc('\n', fp_public_key) == EOF)
+	{
+		eprintf("FATAL: Failed to write public key to %s%s: %s\n", homedir,
+				PUBLIC_KEY_PATH, strerror(errno));
+		safe_fclose(fp_public_key);
+		return -1;
+	}
+
+	safe_fclose(fp_public_key);
+
+	printf("Saved public key to %s%s\n", homedir, PUBLIC_KEY_PATH);
+	fflush(stdout);
 	return 0;
 }
 
@@ -176,7 +265,7 @@ int write_secret_key(FILE* fp_secret_key, const unsigned char* const secret_key,
 				   (unsigned long long)opslimit, (size_t)memlimit) != 0)
 	{
 		eprintf("FATAL: Failed to derive key\n");
-		sodium_free(box_key);
+		safe_sodium_free(box_key);
 		return -1;
 	}
 
@@ -184,7 +273,7 @@ int write_secret_key(FILE* fp_secret_key, const unsigned char* const secret_key,
 							  nonce, box_key) != 0)
 	{
 		// Shouldn't happen
-		sodium_free(box_key);
+		safe_sodium_free(box_key);
 		return -1;
 	}
 	sodium_free(box_key);
@@ -248,7 +337,7 @@ int read_secret_key(FILE* fp_secret_key, unsigned char* secret_key_buf,
 				   (unsigned long long)opslimit, (size_t)memlimit) != 0)
 	{
 		eprintf("FATAL: Failed to derive key\n");
-		sodium_free(box_key);
+		safe_sodium_free(box_key);
 		return -1;
 	}
 
@@ -256,11 +345,11 @@ int read_secret_key(FILE* fp_secret_key, unsigned char* secret_key_buf,
 								   nonce, box_key) != 0)
 	{
 		eprintf("FATAL: Incorrect password or corrupted private key file\n");
-		sodium_free(box_key);
+		safe_sodium_free(box_key);
 		return -1;
 	}
 
-	sodium_free(box_key);
+	safe_sodium_free(box_key);
 	return 0;
 }
 
@@ -302,59 +391,70 @@ int encrypt_file_symmetric(FILE* input_file, FILE* output_file,
 
 	// Write the actual ciphertext
 	int ret = encrypt_file(input_file, output_file, key);
-	sodium_free(key);
+	safe_sodium_free(key);
 	return ret;
 
 error:
-	sodium_free(key);
+	safe_sodium_free(key);
 	return -1;
 }
 
-int encrypt_file_asymmetric(FILE* input_file, FILE* output_file,
-							const unsigned char* const recipient_pubkey) {
-	if (input_file == NULL || output_file == NULL || recipient_pubkey == NULL)
+int encrypt_file_asymmetric(
+	FILE* input_file, FILE* output_file, unsigned char num_recipients,
+	unsigned char recipient_pubkeys[num_recipients]
+								   [crypto_box_PUBLICKEYBYTES]) {
+	if (input_file == NULL || output_file == NULL ||
+		num_recipients > MAX_NUM_RECIPIENTS || num_recipients == 0)
 		return -1;
+
 	const unsigned char SYMMETRY_BYTE = SYMMETRY_ASYMMETRIC;
-	const unsigned char num_recipients_byte = 1; // Reserved as 1 for now
+	const unsigned char num_recipients_byte = num_recipients;
 	unsigned char* key = sodium_malloc(KEY_LEN);
 	if (key == NULL) {
 		perror("FATAL: sodium_malloc()");
 		return -1;
 	}
 
-	// Generate a new key and seal it inside a crypto_box for the sender
+	// Generate a new key to be sealed inside boxes for the recipients later
 	crypto_secretstream_xchacha20poly1305_keygen(key);
 	const size_t box_len =
 		crypto_box_SEALBYTES + crypto_secretstream_xchacha20poly1305_KEYBYTES;
 	unsigned char sealed_box[box_len];
 
-	if (crypto_box_seal(sealed_box, key,
-						crypto_secretstream_xchacha20poly1305_KEYBYTES,
-						recipient_pubkey) != 0)
-	{
-		// Shouldn't happen
-		eprintf("FATAL: crypto_box_seal() failed\n");
-		goto error;
-	}
-
 	// Write header info
 	if (fwrite(NACRYPT_MAGIC, sizeof(NACRYPT_MAGIC), 1, output_file) != 1 ||
 		fwrite(&HEADER_VERSION_BYTE, 1, 1, output_file) != 1 ||
 		fwrite(&SYMMETRY_BYTE, 1, 1, output_file) != 1 ||
-		fwrite(&num_recipients_byte, 1, 1, output_file) != 1 ||
-		fwrite(sealed_box, box_len, 1, output_file) != 1)
+		fwrite(&num_recipients_byte, 1, 1, output_file) != 1)
 	{
-		perror("FATAL: fwrite");
+		perror("fwrite");
 		goto error;
+	}
+
+	for (unsigned char i = 0; i < num_recipients; i++) {
+		if (crypto_box_seal(sealed_box, key,
+							crypto_secretstream_xchacha20poly1305_KEYBYTES,
+							recipient_pubkeys[i]) != 0)
+		{
+			// Shouldn't happen
+			eprintf("FATAL: crypto_box_seal() failed\n");
+			goto error;
+		}
+
+		// Write the box
+		if (fwrite(sealed_box, box_len, 1, output_file) != 1) {
+			perror("FATAL: fwrite");
+			goto error;
+		}
 	}
 
 	// Write the actual ciphertext
 	int ret = encrypt_file(input_file, output_file, key);
-	sodium_free(key);
+	safe_sodium_free(key);
 	return ret;
 
 error:
-	sodium_free(key);
+	safe_sodium_free(key);
 	return -1;
 }
 
@@ -385,7 +485,7 @@ int encrypt_file(FILE* input_file, FILE* output_file,
 	buf_out = (unsigned char*)sodium_malloc(BUF_OUT_LEN);
 	if (buf_out == NULL) {
 		perror("FATAL: sodium_malloc()");
-		sodium_free(buf_in);
+		safe_sodium_free(buf_in);
 		return -1;
 	}
 
@@ -408,13 +508,13 @@ int encrypt_file(FILE* input_file, FILE* output_file,
 		}
 	} while (!eof);
 
-	sodium_free(buf_in);
-	sodium_free(buf_out);
+	safe_sodium_free(buf_in);
+	safe_sodium_free(buf_out);
 	return 0;
 
 error:
-	sodium_free(buf_in);
-	sodium_free(buf_out);
+	safe_sodium_free(buf_in);
+	safe_sodium_free(buf_out);
 	return -1;
 }
 
@@ -462,11 +562,11 @@ int decrypt_file_symmetric(FILE* input_file, FILE* output_file,
 	}
 
 	int ret = decrypt_file(input_file, output_file, key);
-	sodium_free(key);
+	safe_sodium_free(key);
 	return ret;
 
 error:
-	sodium_free(key);
+	safe_sodium_free(key);
 	return -1;
 }
 
@@ -482,9 +582,13 @@ int decrypt_file_asymmetric(FILE* input_file, FILE* output_file,
 		return -1;
 	}
 
-	if (num_recipients_byte != 1) {
-		eprintf("FATAL: This version of nacrypt does not support multiple "
-				"recipients yet!\n");
+	if (num_recipients_byte == 0) {
+		eprintf(
+			"FATAL: Failed to read number of recipients, cannot be zero!\n");
+	}
+
+	if (num_recipients_byte > MAX_NUM_RECIPIENTS) {
+		eprintf("FATAL: Too many recipients in file\n");
 		return -1;
 	}
 
@@ -496,31 +600,48 @@ int decrypt_file_asymmetric(FILE* input_file, FILE* output_file,
 		crypto_box_SEALBYTES + crypto_secretstream_xchacha20poly1305_KEYBYTES;
 	unsigned char sealed_box[box_len];
 
-	if (fread(sealed_box, box_len, 1, input_file) != 1) {
-		eprintf("FATAL: Failed to read sealed box\n");
-		return -1;
-	}
-
 	unsigned char* key = sodium_malloc(KEY_LEN);
 	if (key == NULL) {
 		perror("FATAL: sodium_malloc()");
 		return -1;
 	}
 
-	if (crypto_box_seal_open(key, sealed_box, box_len, public_key,
-							 secret_key) != 0)
-	{
-		eprintf("FATAL: Failed to open sealed box, corrupted file or you are "
-				"not the recipient\n");
+	// Go over each box and see if the box was intended for us
+	int found_good_box = 0;
+	for (unsigned char i = 0; i < num_recipients_byte; i++) {
+		if (fread(sealed_box, box_len, 1, input_file) != 1) {
+			eprintf("FATAL: Failed to read sealed box\n");
+			goto error;
+		}
+
+		if (found_good_box == 1) {
+			// If we already found the good box in a previous iteration then
+			// just go to next iteration (because we still need to fread all the
+			// other boxes up until the start of ciphertext)
+			continue;
+		}
+
+		if (crypto_box_seal_open(key, sealed_box, box_len, public_key,
+								 secret_key) == 0)
+		{
+			// This box was intended for us and has been unsealed.
+			found_good_box = 1;
+		}
+		// Box was not for us, try next
+	}
+
+	if (found_good_box != 1) {
+		eprintf("FATAL: No sealed boxes were openable in this file, either "
+				"corrupted file or you are not a recipient\n");
 		goto error;
 	}
 
 	int ret = decrypt_file(input_file, output_file, key);
-	sodium_free(key);
+	safe_sodium_free(key);
 	return ret;
 
 error:
-	sodium_free(key);
+	safe_sodium_free(key);
 	return -1;
 }
 
@@ -551,7 +672,7 @@ int decrypt_file(FILE* input_file, FILE* output_file,
 	buf_in = (unsigned char*)sodium_malloc(BUF_IN_LEN);
 	if (buf_in == NULL) {
 		perror("FATAL: sodium_malloc");
-		sodium_free(buf_out);
+		safe_sodium_free(buf_out);
 		return -1;
 	}
 
@@ -591,12 +712,12 @@ int decrypt_file(FILE* input_file, FILE* output_file,
 		}
 	} while (!eof);
 
-	sodium_free(buf_in);
-	sodium_free(buf_out);
+	safe_sodium_free(buf_in);
+	safe_sodium_free(buf_out);
 	return 0;
 
 error:
-	sodium_free(buf_in);
-	sodium_free(buf_out);
+	safe_sodium_free(buf_in);
+	safe_sodium_free(buf_out);
 	return -1;
 }

@@ -15,6 +15,8 @@
 #define PUBLIC_KEY_PATH "/.nacrypt/public.key"
 #define NACRYPT_DIR_PATH "/.nacrypt"
 
+#define MAX_NUM_RECIPIENTS 5
+
 static const unsigned char NACRYPT_MAGIC[4] = {0x4E, 0x41, 0x1F, 0xF0};
 #define SYMMETRY_ASYMMETRIC 1
 #define SYMMETRY_SYMMETRIC 0
@@ -28,6 +30,7 @@ int derive_key(unsigned char* key, unsigned long long keylen,
 			   unsigned long long opslimit, size_t memlimit);
 
 int generate_keypair(void);
+int regenerate_public_key(void);
 
 int dearmor_public_key(const char* const armored_public_key,
 					   unsigned char* public_key_buf);
@@ -40,8 +43,9 @@ int read_secret_key(FILE* fp_secret_key, unsigned char* secret_key_buf,
 
 int encrypt_file_symmetric(FILE* input_file, FILE* output_file,
 						   const char* const password);
-int encrypt_file_asymmetric(FILE* input_file, FILE* output_file,
-							const unsigned char* const recipient_pubkey);
+int encrypt_file_asymmetric(
+	FILE* input_file, FILE* output_file, unsigned char num_recipients,
+	unsigned char recipient_pubkeys[num_recipients][crypto_box_PUBLICKEYBYTES]);
 int encrypt_file(FILE* input_file, FILE* output_file,
 				 const unsigned char* const key);
 

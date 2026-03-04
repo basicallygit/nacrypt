@@ -12,6 +12,7 @@ Options:
   -e, --encrypt [optional]  Specify encrypt mode
   -d, --decrypt [optional]  Specify decrypt mode
   -g, --gen-key             Generate a new keypair
+  -R, --regen-public        Regenerate your public key if its lost
   -r, --recipient <pubkey>  Encrypt this file to <pubkey>
   -p, --private-key <path>  Specify custom path to private key
   -v, --version             Print nacrypt version info

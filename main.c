@@ -2,12 +2,12 @@
 #include "sandbox.h"
 #include "utils.h"
 #include "version.h"
-#include <arpa/inet.h> // htonl, ntohl
 #include <errno.h>
 #include <inttypes.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define NACRYPT_HELP_MESSAGE                                                   \
@@ -18,6 +18,7 @@
 	"  -e, --encrypt [optional]  Specify encrypt mode\n"                       \
 	"  -d, --decrypt [optional]  Specify decrypt mode\n"                       \
 	"  -g, --gen-key             Generate a new keypair\n"                     \
+	"  -R, --regen-public        Regenerate your public key if its lost\n"     \
 	"  -r, --recipient <pubkey>  Encrypt this file to <pubkey>\n"              \
 	"  -p, --private-key <path>  Specify custom path to private key\n"         \
 	"  -v, --version             Print nacrypt version info\n"                 \
@@ -61,6 +62,17 @@ int main(int argc, char** argv) {
 			if (generate_keypair() != 0)
 				return 1;
 			return 0;
+		} else if (strcmp(argv[1], "-R") == 0 ||
+				   strcmp(argv[1], "--regen-public") == 0)
+		{
+			if (sodium_init() != 0) {
+				eprintf("FATAL: sodium_init() failed\n");
+				return 1;
+			}
+
+			if (regenerate_public_key() != 0)
+				return 1;
+			return 0;
 		} else if (strcmp(argv[1], "-v") == 0 ||
 				   strcmp(argv[1], "--version") == 0)
 		{
@@ -70,14 +82,19 @@ int main(int argc, char** argv) {
 			return 0;
 		}
 	}
-	if (argc < 4 || argc > 9) {
+
+	// nacrypt, input.txt, -o, output.txt [--{en,de}crypt] + MAX_NUM_RECIPIENTS
+	// * 2 for the -r before each one
+	const int max_argc = 5 + (MAX_NUM_RECIPIENTS * 2);
+	if (argc < 4 || argc > max_argc) {
 		print_usage(stderr);
 		return 1;
 	}
 
 	char* input_filename = NULL;
 	char* output_filename = NULL;
-	char* recipient_pubkey_armored = NULL;
+	unsigned char num_recipients = 0;
+	char* recipient_pubkeys_armored[MAX_NUM_RECIPIENTS];
 	char* custom_secret_key_path = NULL;
 	enum Mode mode = UNSPECIFIED;
 	int verbose = 0;
@@ -105,7 +122,14 @@ int main(int argc, char** argv) {
 				return -1;
 			}
 
-			recipient_pubkey_armored = argv[i + 1];
+			if (num_recipients == MAX_NUM_RECIPIENTS) {
+				eprintf("FATAL: Too many recipients (max %d)\n",
+						MAX_NUM_RECIPIENTS);
+				return -1;
+			}
+
+			recipient_pubkeys_armored[num_recipients] = argv[i + 1];
+			num_recipients++;
 			i++;
 		} else if (strcmp(argv[i], "-p") == 0 ||
 				   strcmp(argv[i], "--private-key") == 0)
@@ -154,7 +178,7 @@ int main(int argc, char** argv) {
 	if (fp_output == NULL) {
 		eprintf("FATAL: Failed to open %s: %s\n", output_filename,
 				strerror(errno));
-		fclose(fp_input);
+		safe_fclose(fp_input);
 		return 1;
 	}
 
@@ -171,15 +195,6 @@ int main(int argc, char** argv) {
 		}
 	}
 
-// Safe to call at any point
-#define CLOSE_SECRET()                                                         \
-	do {                                                                       \
-		if (fp_secret_key != NULL) {                                           \
-			fclose(fp_secret_key);                                             \
-			fp_secret_key = NULL;                                              \
-		}                                                                      \
-	} while (0)
-
 #if !defined(NO_SANDBOX)
 	int input_fd = fileno(fp_input);
 	int output_fd = fileno(fp_output);
@@ -194,6 +209,12 @@ int main(int argc, char** argv) {
 #if defined(ALLOW_SANDBOX_FAIL)
 		eprintf("WARNING: Failed to apply sandbox.. (non-fatal because of "
 				"-DALLOW_SANDBOX_FAIL)\n");
+		if (yesno_defaultno_prompt(
+				"Would you like to continue unsandboxed [y/N]: ") != 'Y')
+		{
+			eprintf("Aborting..\n");
+			goto error;
+		}
 #else
 		eprintf("FATAL: Failed to apply sandbox.. (-DALLOW_SANDBOX_FAIL not "
 				"set)\n");
@@ -258,19 +279,22 @@ int main(int argc, char** argv) {
 	}
 
 	if (mode == ENCRYPT) {
-		if (recipient_pubkey_armored != NULL) {
-			// Public key was provided, asymmetric encrypt mode
-			unsigned char recipient_public_key[crypto_box_PUBLICKEYBYTES];
-			if (dearmor_public_key(recipient_pubkey_armored,
-								   recipient_public_key) != 0)
-			{
-				eprintf("FATAL: %s: Not a valid nacrypt public key\n",
-						recipient_pubkey_armored);
-				goto error;
+		if (num_recipients != 0) {
+			// Public keys were provided, asymmetric encrypt mode
+			unsigned char recipient_public_keys[MAX_NUM_RECIPIENTS]
+											   [crypto_box_PUBLICKEYBYTES];
+			for (unsigned char j = 0; j < num_recipients; j++) {
+				if (dearmor_public_key(recipient_pubkeys_armored[j],
+									   recipient_public_keys[j]) != 0)
+				{
+					eprintf("FATAL: %s: Not a valid nacrypt public key\n",
+							recipient_pubkeys_armored[j]);
+					goto error;
+				}
 			}
 
-			if (encrypt_file_asymmetric(fp_input, fp_output,
-										recipient_public_key) != 0)
+			if (encrypt_file_asymmetric(fp_input, fp_output, num_recipients,
+										recipient_public_keys) != 0)
 			{
 				eprintf("FATAL: Failed to encrypt file\n");
 				goto error;
@@ -290,27 +314,27 @@ int main(int argc, char** argv) {
 
 			char* password_again = read_password(MAX_PASSWORD_SIZE);
 			if (password_again == NULL) {
-				sodium_free(password);
+				safe_sodium_free(password);
 				goto error;
 			}
 
 			if (sodium_memcmp(password, password_again, MAX_PASSWORD_SIZE) != 0)
 			{
 				eprintf("FATAL: Passwords did not match\n");
-				sodium_free(password);
-				sodium_free(password_again);
+				safe_sodium_free(password);
+				safe_sodium_free(password_again);
 				goto error;
 			}
 
-			sodium_free(password_again);
+			safe_sodium_free(password_again);
 
 			if (encrypt_file_symmetric(fp_input, fp_output, password) != 0) {
 				eprintf("FATAL: Failed to encrypt file\n");
-				sodium_free(password);
+				safe_sodium_free(password);
 				goto error;
 			}
 
-			sodium_free(password);
+			safe_sodium_free(password);
 		}
 	} else if (mode == DECRYPT) {
 		if (symmetry == SYMMETRY_ASYMMETRIC) {
@@ -360,20 +384,20 @@ int main(int argc, char** argv) {
 			}
 
 			if (read_secret_key(fp_secret_key, secret_key, password) != 0) {
-				sodium_free(password);
-				sodium_free(secret_key);
+				safe_sodium_free(password);
+				safe_sodium_free(secret_key);
 				goto error; // Error already printed for us
 			}
 
-			sodium_free(password);
+			safe_sodium_free(password);
 
 			if (decrypt_file_asymmetric(fp_input, fp_output, secret_key) != 0) {
 				eprintf("FATAL: Failed to decrypt file\n");
-				sodium_free(secret_key);
+				safe_sodium_free(secret_key);
 				goto error;
 			}
 
-			sodium_free(secret_key);
+			safe_sodium_free(secret_key);
 		} else {
 			// Symmetric decrypt mode
 			printf("Password for %s: ", input_filename);
@@ -386,25 +410,25 @@ int main(int argc, char** argv) {
 
 			if (decrypt_file_symmetric(fp_input, fp_output, password) != 0) {
 				eprintf("FATAL: Failed to decrypt file\n");
-				sodium_free(password);
+				safe_sodium_free(password);
 				goto error;
 			}
 
-			sodium_free(password);
+			safe_sodium_free(password);
 		}
 	} else {
 		eprintf("FATAL: UNREACHABLE\n");
 		goto error;
 	}
 
-	CLOSE_SECRET();
-	fclose(fp_input);
-	fclose(fp_output);
+	safe_fclose(fp_secret_key);
+	safe_fclose(fp_input);
+	safe_fclose(fp_output);
 	return 0;
 
 error:
-	CLOSE_SECRET();
-	fclose(fp_input);
-	fclose(fp_output);
+	safe_fclose(fp_secret_key);
+	safe_fclose(fp_input);
+	safe_fclose(fp_output);
 	return 1;
 }
