@@ -1,0 +1,31 @@
+[package]
+name = "nacrypt"
+version = "1.2.7"
+authors = ["basicallygit 91993321+basicallygit@users.noreply.github.com"]
+edition = "2024"
+description = "A secure and easy-to-use file encryption utility"
+license = "Apache-2.0"
+repository = "https://github.com/basicallygit/nacrypt"
+homepage = "https://github.com/basicallygit/nacrypt"
+readme = "README.md"
+keywords = ["encryption", "cryptography", "sodium", "libsodium"]
+categories = ["cryptography", "command-line-utilities"]
+
+[[bin]]
+name = "nacrypt"
+path = "src/main.rs"
+
+[[bin]]
+name = "nacrypt-inspect"
+path = "src/bin/nacrypt-inspect.rs"
+
+[[bin]]
+name = "nacrypt-overhead"
+path = "src/bin/nacrypt-overhead.rs"
+
+[dependencies]
+anyhow = "1.0.102"
+clap = { version = "4.5.60", features = ["derive"] }
+dirs = "6.0.0"
+libsodium-rs = "0.2.2"
+rpassword = "7.4.0"

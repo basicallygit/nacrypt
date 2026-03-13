@@ -1,0 +1,3 @@
+[env]
+SODIUM_USE_PKG_CONFIG = "1"
+SODIUM_SHARED = "1"
