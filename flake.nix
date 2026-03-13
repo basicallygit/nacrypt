@@ -10,43 +10,42 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        stdenv = pkgs.clangStdenv;
         in
         {
-        packages.default = pkgs.stdenv.mkDerivation {
+        packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "nacrypt";
-          version = "1.2.0";
+          version = "1.2.7";
           src = ./.;
 
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+          };
+
           nativeBuildInputs = [
-            pkgs.clang
-            pkgs.gnumake
+            pkgs.pkg-config
+            pkgs.rustPlatform.bindgenHook
           ];
 
           buildInputs = [
             pkgs.libsodium
-            pkgs.libseccomp
-            pkgs.libcap
           ];
 
-          makeFlags = [
-            "CLANG_CFI=y"
-            "TIGHTENED_SANDBOX=y"
-          ];
+          SODIUM_USE_PKG_CONFIG = "1";
+		  SODIUM_SHARED = "1";
 
-          installPhase = ''
-            mkdir -p $out/bin
-            cp nacrypt $out/bin/
-          '';
+          
         };
 
-        devShells.default = pkgs.mkShell.override { inherit stdenv; } {
+        devShells.default = pkgs.mkShell {
           inputsFrom = [ self.packages.${system}.default ];
           packages = with pkgs; [
-            lldb
-            clang-tools
-            valgrind
+            rustfmt
+            rustc
+            rust-analyzer
+            cargo
+            clippy
             strace
+            pkg-config
           ];
         };
       }

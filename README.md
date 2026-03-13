@@ -14,7 +14,7 @@ $ paru/yay -S nacrypt
 
 You can install nacrypt as a binary crate with cargo:
 ```sh
-$ cargo install nacrypt
+$ SODIUM_USE_PKG_CONFIG=1 SODIUM_SHARED=1 cargo install nacrypt
 ```
 Or alternatively build from source:
 ```sh
