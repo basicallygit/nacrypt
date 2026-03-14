@@ -1,6 +1,4 @@
-# Nacrypt
-
-A simple and easy-to-use file encryption utility.
+<img src="resources/nacrypt_logo_description.png" width=700 alt="Nacrypt - A simple and secure file encryption utility">
 
 # Installation
 Nacrypt is available on the [AUR](https://aur.archlinux.org/packages/nacrypt)<br>
