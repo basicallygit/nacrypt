@@ -475,6 +475,7 @@ dependencies = [
  "clap",
  "dirs",
  "libsodium-rs",
+ "libsodium-sys-stable",
  "rpassword",
 ]
 
